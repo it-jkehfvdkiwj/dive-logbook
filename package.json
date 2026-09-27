@@ -6,6 +6,7 @@
     "dev": "next dev",
     "dev:lan": "next dev -H 0.0.0.0",
     "build": "next build",
+    "vercel-build": "node scripts/check-env.mjs && prisma generate && prisma migrate deploy && tsx prisma/seed.ts && next build",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
@@ -49,5 +50,8 @@
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
     "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=20.9.0"
   }
 }

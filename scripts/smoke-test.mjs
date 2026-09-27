@@ -1,9 +1,11 @@
 // End-to-End-Test der API gegen einen laufenden Server.
 //   npm run dev   (oder npm run build && npm start)
 //   node scripts/smoke-test.mjs [http://localhost:3000]
+//   Mit Passwortschutz: APP_PASSWORD=… node scripts/smoke-test.mjs https://deine-app.vercel.app
 // Legt Testdaten an und räumt sie am Ende wieder auf.
 
 const BASE = process.argv[2] ?? process.env.BASE_URL ?? "http://localhost:3000";
+let cookie = "";
 let passed = 0;
 let failed = 0;
 
@@ -20,7 +22,10 @@ function check(name, condition, extra) {
 async function call(method, path, body) {
   const res = await fetch(BASE + path, {
     method,
-    headers: body !== undefined ? { "Content-Type": "application/json" } : undefined,
+    headers: {
+      ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+      ...(cookie ? { Cookie: cookie } : {}),
+    },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   const data = await res.json().catch(() => null);
@@ -49,6 +54,15 @@ const diveBody = (over = {}) => ({
 
 async function main() {
   console.log(`Smoke test against ${BASE}\n`);
+  if (process.env.APP_PASSWORD) {
+    const res = await fetch(`${BASE}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: process.env.APP_PASSWORD }),
+    });
+    cookie = (res.headers.get("set-cookie") ?? "").split(";")[0];
+    check("login with APP_PASSWORD", res.ok && cookie.startsWith("divelog_session="));
+  }
 
   console.log("Dives – CRUD & validation");
   const a = await call("POST", "/api/dives", diveBody());

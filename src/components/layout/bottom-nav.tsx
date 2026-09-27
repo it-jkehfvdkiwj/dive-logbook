@@ -7,6 +7,7 @@ import { NAV_ITEMS, isActive } from "./nav-items";
 
 export function BottomNav() {
   const pathname = usePathname();
+  if (pathname === "/login") return null;
   return (
     <nav
       aria-label="Main"

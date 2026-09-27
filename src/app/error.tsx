@@ -9,7 +9,7 @@ export default function Error({ error, reset }: { error: Error & { digest?: stri
       title={isDb ? "Database not reachable" : "Something went wrong"}
       message={
         isDb
-          ? "Make sure PostgreSQL is running (npm run db:up) and DATABASE_URL in .env is correct."
+          ? "Check that the database is running and DATABASE_URL is set correctly (locally: npm run db:up; on Vercel: Storage → Neon connected)."
           : "The page could not be loaded. Please try again."
       }
       onRetry={reset}

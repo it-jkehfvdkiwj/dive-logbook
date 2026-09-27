@@ -3,6 +3,8 @@ import { ThemeSelector } from "@/components/common/theme-selector";
 import { ProfileForm } from "@/components/settings/profile-form";
 import { JsonImport } from "@/components/settings/json-import";
 import { DemoDataPanel } from "@/components/settings/demo-data-panel";
+import { LogoutButton } from "@/components/settings/logout-button";
+import { isAuthEnabled } from "@/lib/auth";
 import { IMPORT_SOURCES } from "@/importers/registry";
 import { cn } from "@/lib/utils";
 import { countDemoDives } from "@/services/demoDataService";
@@ -71,6 +73,12 @@ export default async function SettingsPage() {
         <Section title="Demo data">
           <DemoDataPanel demoDives={demoDives} />
         </Section>
+
+        {isAuthEnabled() && (
+          <Section title="Account">
+            <LogoutButton />
+          </Section>
+        )}
       </div>
     </>
   );

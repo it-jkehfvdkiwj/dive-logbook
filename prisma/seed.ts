@@ -2,6 +2,10 @@
  * Seed-Skript
  *   npm run db:seed            → Katalog + Demo-Dives (nur wenn noch keine Dives existieren)
  *   npm run db:seed -- --no-demo  → nur Arten-Katalog
+ *   npm run db:seed -- --force-demo → Demo-Dives auch nach dem ersten Lauf (nur wenn DB leer)
+ *
+ * Idempotent: läuft auf Vercel bei jedem Deployment. Demo-Dives werden nur beim
+ * allerersten Lauf angelegt – gelöschte Demo-Daten kommen also nicht zurück.
  *
  * Demo-Daten sind mit source = "demo" markiert und können in
  * Settings → Demo data (oder: npm run db:clear-demo) entfernt werden.
@@ -12,7 +16,9 @@ import { PrismaClient } from "../src/generated/prisma/client";
 import { slugify } from "../src/lib/utils";
 import { DEMO_DIVES, SPECIES_CATALOG } from "./seed-data";
 
-const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }) });
+const db = new PrismaClient({
+  adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL! }),
+});
 
 async function seedCatalog() {
   let created = 0;
@@ -37,7 +43,11 @@ async function seedCatalog() {
   console.log(`Species catalog: ${created} created, ${SPECIES_CATALOG.length - created} already present`);
 }
 
-async function seedDemoDives() {
+async function seedDemoDives(firstRun: boolean) {
+  if (!firstRun) {
+    console.log("Skipping demo dives – not the first run (delete demo data anytime in Settings).");
+    return;
+  }
   const count = await db.dive.count();
   if (count > 0) {
     console.log(`Skipping demo dives – database already contains ${count} dive(s).`);
@@ -85,19 +95,23 @@ async function seedDemoDives() {
   console.log(`Demo dives: ${DEMO_DIVES.length} created`);
 }
 
-async function seedSettings() {
+/** Legt die Settings an. Gibt true zurück, wenn die DB zum ersten Mal befüllt wird. */
+async function seedSettings(): Promise<boolean> {
+  const existing = await db.appSettings.findUnique({ where: { id: 1 }, select: { id: true } });
+  if (existing) return false;
   await db.appSettings.upsert({
     where: { id: 1 },
     update: {},
     create: { id: 1, displayName: process.env.SEED_DISPLAY_NAME ?? "Quirin" },
   });
+  return true;
 }
 
 async function main() {
-  const withDemo = !process.argv.includes("--no-demo");
-  await seedSettings();
+  const withDemo = !process.argv.includes("--no-demo") && process.env.SEED_DEMO !== "false";
+  const firstRun = await seedSettings();
   await seedCatalog();
-  if (withDemo) await seedDemoDives();
+  if (withDemo) await seedDemoDives(firstRun || process.argv.includes("--force-demo"));
 }
 
 main()
