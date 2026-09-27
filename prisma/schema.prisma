@@ -1,0 +1,164 @@
+// Dive Logbook – Datenmodell
+//
+// Grundprinzip: Alle Datenquellen (manuell, SSI, Suunto, Garmin, …) werden auf
+// DIESES interne Modell normalisiert. Keine Tabelle hängt von einem externen
+// Format ab. Externe Herkunft wird nur über `source` + `externalId` vermerkt.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// Tauchplatz. Normalisiert, damit Statistiken ("verschiedene Tauchplätze"),
+/// eine spätere Weltkarte und externe Platz-IDs (z. B. SSI) sauber möglich sind.
+model DiveSite {
+  id         String   @id @default(cuid())
+  name       String
+  location   String? // Region / Ort, z. B. "Shelly Beach"
+  country    String?
+  latitude   Float?
+  longitude  Float?
+  source     String   @default("manual")
+  externalId String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  dives Dive[]
+
+  @@unique([source, externalId])
+  @@index([name])
+  @@index([country])
+}
+
+model Dive {
+  id         String    @id @default(cuid())
+  diveNumber Int?
+  /// Kalenderdatum des Tauchgangs (ohne Zeitzone – Ortszeit am Tauchplatz)
+  date       DateTime  @db.Date
+  /// Startzeit als "HH:mm" (Ortszeit). Bewusst getrennt vom Datum, um Zeitzonen-Fehler zu vermeiden.
+  startTime  String?
+
+  diveSiteId String
+  diveSite   DiveSite @relation(fields: [diveSiteId], references: [id], onDelete: Restrict)
+
+  maxDepth         Float? // m
+  avgDepth         Float? // m
+  duration         Int? // Minuten
+  waterTemperature Float? // °C
+  visibility       Float? // m
+  conditions       String? // Wasserbedingungen, z. B. "Calm", "Surge"
+  current          String?
+  weather          String?
+  entryType        String?
+  diveType         String?
+  buddy            String?
+  diveCenter       String?
+  notes            String?
+  favorite         Boolean @default(false)
+
+  // --- Externe Herkunft / Sync ---------------------------------------------
+  /// "manual" | "demo" | "ssi" | "suunto" | "garmin" | …
+  source               String    @default("manual")
+  externalId           String?
+  lastSyncedAt         DateTime?
+  /// Felder, die der Nutzer nach einem Import manuell geändert hat.
+  /// Ein späterer Sync überschreibt diese Felder nicht (außer explizit konfiguriert).
+  manuallyEditedFields String[]  @default([])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sightings Sighting[]
+  photos    DivePhoto[]
+
+  /// Verhindert doppelte Importe desselben externen Tauchgangs.
+  @@unique([source, externalId])
+  @@index([date])
+  @@index([favorite])
+}
+
+model Species {
+  id             String   @id @default(cuid())
+  commonName     String
+  /// Eindeutig (case-insensitiv im Service geprüft). Optional, falls unbekannt.
+  scientificName String?  @unique
+  /// Frei erweiterbar – bekannte Werte in src/lib/categories.ts
+  category       String   @default("Other")
+  description    String?
+  imageUrl       String?
+  slug           String   @unique
+  /// "manual" | "catalog" | später z. B. "worms", "inaturalist", "ssi"
+  source         String   @default("manual")
+  externalId     String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  sightings Sighting[]
+  photos    DivePhoto[]
+
+  @@unique([source, externalId])
+  @@index([commonName])
+  @@index([category])
+}
+
+/// Verbindet Dive ↔ Species. Eine Art pro Dive genau einmal (Anzahl über `count`).
+model Sighting {
+  id         String   @id @default(cuid())
+  diveId     String
+  dive       Dive     @relation(fields: [diveId], references: [id], onDelete: Cascade)
+  speciesId  String
+  species    Species  @relation(fields: [speciesId], references: [id], onDelete: Cascade)
+  count      Int?
+  notes      String?
+  source     String   @default("manual")
+  externalId String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([diveId, speciesId])
+  @@index([speciesId])
+}
+
+/// Fotos zu einem Dive. Upload-Infrastruktur folgt später – aktuell per URL.
+/// Späterer AI-Flow: Photo → Identification → Suggested Species → User bestätigt → Sighting.
+model DivePhoto {
+  id         String   @id @default(cuid())
+  diveId     String
+  dive       Dive     @relation(fields: [diveId], references: [id], onDelete: Cascade)
+  url        String
+  caption    String?
+  /// Optional einer Art zugeordnet (später z. B. durch bestätigte AI-Erkennung)
+  speciesId  String?
+  species    Species? @relation(fields: [speciesId], references: [id], onDelete: SetNull)
+  takenAt    DateTime?
+  source     String   @default("manual")
+  externalId String?
+  createdAt  DateTime @default(now())
+
+  @@index([diveId])
+}
+
+/// Protokoll eines Imports/Syncs aus einer externen Quelle.
+model ImportRun {
+  id         String    @id @default(cuid())
+  source     String
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  status     String    @default("running") // running | success | failed
+  created    Int       @default(0)
+  updated    Int       @default(0)
+  skipped    Int       @default(0)
+  error      String?
+}
+
+/// Singleton (id = 1) für App-Einstellungen.
+model AppSettings {
+  id                       Int     @id @default(1)
+  displayName              String  @default("Diver")
+  /// Wenn true, überschreibt ein Sync auch manuell geänderte Felder.
+  syncOverwriteManualEdits Boolean @default(false)
+}
