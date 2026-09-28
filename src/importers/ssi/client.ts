@@ -64,3 +64,12 @@ export async function ssiGetDivelog(token: string): Promise<Record<string, unkno
   }
   return data as Record<string, unknown>;
 }
+
+/** Beliebigen Endpunkt abfragen (für das Suchen des Tier-Katalogs). Fehler → null. */
+export async function ssiTryCall(token: string, what: string, extra: Record<string, string> = {}): Promise<unknown> {
+  try {
+    return await getJson({ what, token, ...extra });
+  } catch {
+    return null;
+  }
+}

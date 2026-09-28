@@ -1,6 +1,6 @@
 import type { DiveImporter, ImportedDive } from "./types";
-import { ssiAuthenticate, ssiGetDivelog } from "./ssi/client";
-import { mapSsiLogbook } from "./ssi/mapper";
+import { ssiAuthenticate, ssiGetDivelog, ssiTryCall } from "./ssi/client";
+import { findCatalogList, mapSsiLogbook, parseIdList } from "./ssi/mapper";
 
 /**
  * SSI-Import über die (inoffizielle) MySSI-App-API.
@@ -20,9 +20,38 @@ export class SSIImporter implements DiveImporter {
   async importDives(): Promise<ImportedDive[]> {
     const token = await ssiAuthenticate(this.email, this.password);
     const raw = await ssiGetDivelog(token);
-    const { dives, diagnostics } = mapSsiLogbook(raw);
-    this.log = diagnostics;
+    const probeLog: string[] = [];
+    const catalog = await this.findAnimalCatalog(token, raw, probeLog);
+    const { dives, diagnostics } = mapSsiLogbook(raw, catalog);
+    this.log = [...diagnostics, ...probeLog];
     return dives;
+  }
+
+  /**
+   * SSI liefert pro Dive nur Tier-IDs. Die Namen stehen in einem separaten Katalog,
+   * dessen Endpunkt nicht dokumentiert ist – daher werden bekannte Kandidaten ausprobiert.
+   * Nur wenn Tier-IDs vorhanden sind und die Logbuch-Antwort selbst keine Namen enthält.
+   */
+  private async findAnimalCatalog(token: string, raw: Record<string, unknown>, log: string[]) {
+    const details = Array.isArray(raw.logbook_details) ? raw.logbook_details : [];
+    const hasAnimalIds = details.some(
+      (d) => d && typeof d === "object" && parseIdList((d as Record<string, unknown>).odin_user_log_animal_ids).length > 0,
+    );
+    if (!hasAnimalIds) return null;
+    const inResponse = Object.entries(raw).some(([k, v]) => /animal|fish|wildlife/i.test(k) && Array.isArray(v) && v.length);
+    if (inResponse) return null;
+
+    const endpoints = process.env.SSI_ANIMAL_ENDPOINT
+      ? [process.env.SSI_ANIMAL_ENDPOINT]
+      : ["get_animals", "get_animal_list", "get_animallist", "get_fish", "get_fishes", "get_marinelife", "get_wildlife", "get_species", "animals"];
+    for (const what of endpoints) {
+      const data = await ssiTryCall(token, what);
+      const list = findCatalogList(data);
+      const keys = data && typeof data === "object" && !Array.isArray(data) ? Object.keys(data).slice(0, 8).join(", ") : typeof data;
+      log.push(`animal catalog probe "${what}": ${list ? `${list.length} entries (fields: ${Object.keys(list[0]).join(", ")})` : `no list (${keys})`}`);
+      if (list) return list;
+    }
+    return null;
   }
 
   diagnostics(): string[] {
