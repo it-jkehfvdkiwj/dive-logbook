@@ -55,18 +55,21 @@ export function BaseMap({ className, layer = "map", center = [15, 20], zoom = 1.
         map.touchZoomRotate?.disableRotation();
         mapRef.current = map;
         appliedStyle.current = styleKey;
-        let ready = false;
-        map.once("load", () => {
-          if (cancelled) return;
-          ready = true;
-          window.clearTimeout(fallbackTimer);
-          setLoaded(true);
-          onReadyRef.current?.(map, ml);
+        // Pins/Steuerung sofort bereitstellen – nicht auf alle Kacheln warten
+        // (Vektorkarte lädt mobil teils langsam; "load" kommt erst danach).
+        onReadyRef.current?.(map, ml);
+        const markLoaded = () => !cancelled && setLoaded(true);
+        map.once("styledata", markLoaded);
+        map.once("load", markLoaded);
+        // Nur wenn der Kartenstil selbst nicht geladen werden kann: einfacher Hintergrund
+        map.on("error", (e) => {
+          const url = (e.error as { url?: string } | undefined)?.url ?? "";
+          if (!cancelled && url.includes("/styles/")) {
+            console.warn("Map style failed, using fallback", e.error);
+            map.setStyle(FALLBACK_STYLE);
+            markLoaded();
+          }
         });
-        // Kartenserver hängt/fehlt → einfacher Hintergrund, damit Pins trotzdem erscheinen
-        const fallbackTimer = window.setTimeout(() => {
-          if (!ready && !cancelled) map.setStyle(FALLBACK_STYLE);
-        }, 8000);
         observer = new ResizeObserver(() => map.resize());
         observer.observe(containerRef.current);
       })
