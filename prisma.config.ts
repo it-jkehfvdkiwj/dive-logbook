@@ -1,9 +1,10 @@
 import "dotenv/config";
 import { defineConfig } from "prisma/config";
+import { getDirectDatabaseUrl } from "./src/lib/database-url.mjs";
 
 // Für Migrationen die direkte (ungepoolte) Verbindung nutzen, falls vorhanden.
 // Neon auf Vercel setzt DATABASE_URL (gepoolt) und DATABASE_URL_UNPOOLED (direkt).
-const url = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
+const url = getDirectDatabaseUrl();
 
 export default defineConfig({
   schema: "prisma/schema.prisma",
