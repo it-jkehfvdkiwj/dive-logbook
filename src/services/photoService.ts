@@ -7,16 +7,16 @@ import type { PhotoInput } from "@/lib/validation/misc";
  * Später kann hier ein Storage-Adapter (S3, R2, lokales Dateisystem) ergänzt werden,
  * ohne dass sich das Datenmodell ändert.
  */
-export async function addPhoto(diveId: string, input: PhotoInput) {
-  const dive = await db.dive.findUnique({ where: { id: diveId }, select: { id: true } });
+export async function addPhoto(userId: string, diveId: string, input: PhotoInput) {
+  const dive = await db.dive.findFirst({ where: { id: diveId, userId }, select: { id: true } });
   if (!dive) throw new NotFoundError("Dive");
   return db.divePhoto.create({
     data: { diveId, url: input.url, caption: input.caption, speciesId: input.speciesId },
   });
 }
 
-export async function deletePhoto(id: string) {
-  const photo = await db.divePhoto.findUnique({ where: { id }, select: { id: true } });
+export async function deletePhoto(userId: string, id: string) {
+  const photo = await db.divePhoto.findFirst({ where: { id, dive: { userId } }, select: { id: true } });
   if (!photo) throw new NotFoundError("Photo");
   await db.divePhoto.delete({ where: { id } });
 }

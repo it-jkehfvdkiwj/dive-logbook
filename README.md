@@ -81,6 +81,15 @@ Kosten: Vercel Hobby und Neon Free sind für eine persönliche App kostenlos.
 
 ---
 
+## 3b. Mehrere Benutzer
+
+- Login nur mit **Passwort**: Jedes Passwort gehört zu genau einem Benutzer und öffnet dessen Logbuch.
+- Der erste Benutzer (Admin) meldet sich mit `APP_PASSWORD` an. Beim Upgrade gehen alle bisherigen Daten an ihn.
+- Admin: **Settings → Users → Add a diver** (Name + Passwort). Der neue Benutzer loggt sich nur mit diesem Passwort ein.
+- Jeder Benutzer hat eigene Dives, Tauchplätze, Life List, Favoriten, Statistiken und SSI-Imports. Der **Artenkatalog ist gemeinsam**.
+- Eigenes Passwort ändern: **Settings → Account**. Passwörter müssen eindeutig sein.
+- `SSI_EMAIL`/`SSI_PASSWORD` und der nächtliche Cron gelten nur für den Admin. Andere Benutzer geben ihre SSI-Daten beim Sync ein.
+
 ## 3a. SSI-Logbuch synchronisieren
 
 Die App lädt deine Tauchgänge direkt aus deinem SSI-Konto (MySSI). Genutzt wird dieselbe Schnittstelle wie von der MySSI-App, nach dem Vorbild von [divessi-export](https://github.com/gerardpuig/divessi-export).

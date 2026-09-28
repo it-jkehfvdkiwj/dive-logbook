@@ -5,6 +5,7 @@ import type { DiveFormValues } from "@/lib/dive-form-values";
 import { toDateInputValue } from "@/lib/format";
 import { getDive, listDiveTypes } from "@/services/diveService";
 import { listCountries, listLocations } from "@/services/diveSiteService";
+import { requirePageUser } from "@/lib/current-user";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Edit Dive" };
@@ -13,11 +14,12 @@ const str = (v: string | number | null | undefined) => (v == null ? "" : String(
 
 export default async function EditDivePage({ params }: PageProps<"/dives/[id]/edit">) {
   const { id } = await params;
+  const user = await requirePageUser();
   const [dive, countries, locations, diveTypes] = await Promise.all([
-    getDive(id),
-    listCountries(),
-    listLocations(),
-    listDiveTypes(),
+    getDive(user.id, id),
+    listCountries(user.id),
+    listLocations(user.id),
+    listDiveTypes(user.id),
   ]);
   if (!dive) notFound();
 

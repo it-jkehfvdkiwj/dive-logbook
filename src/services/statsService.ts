@@ -1,40 +1,42 @@
 import { db } from "@/lib/db";
 import type { OverviewStats } from "@/types";
 
-export async function getOverviewStats(): Promise<OverviewStats> {
+export async function getOverviewStats(userId: string): Promise<OverviewStats> {
   const [agg, avgDepthAgg, deepest, speciesByCategoryRows, totalSightings, sites, topRaw, diveCountries] =
     await Promise.all([
       db.dive.aggregate({
+        where: { userId },
         _count: { _all: true },
         _sum: { duration: true },
         _avg: { duration: true, maxDepth: true },
         _max: { maxDepth: true },
       }),
-      db.dive.aggregate({ _avg: { avgDepth: true } }),
+      db.dive.aggregate({ where: { userId }, _avg: { avgDepth: true } }),
       db.dive.findFirst({
-        where: { maxDepth: { not: null } },
+        where: { userId, maxDepth: { not: null } },
         orderBy: { maxDepth: "desc" },
         select: { id: true },
       }),
       db.species.groupBy({
         by: ["category"],
-        where: { sightings: { some: {} } },
+        where: { sightings: { some: { dive: { userId } } } },
         _count: { _all: true },
       }),
-      db.sighting.count(),
+      db.sighting.count({ where: { dive: { userId } } }),
       db.diveSite.findMany({
-        where: { dives: { some: {} } },
+        where: { userId, dives: { some: {} } },
         select: { id: true, country: true, _count: { select: { dives: true } } },
       }),
       db.sighting.groupBy({
         by: ["speciesId"],
+        where: { dive: { userId } },
         _count: { _all: true },
         orderBy: { _count: { speciesId: "desc" } },
         take: 5,
       }),
       db.diveSite.groupBy({
         by: ["country"],
-        where: { dives: { some: {} } },
+        where: { userId, dives: { some: {} } },
       }),
     ]);
 

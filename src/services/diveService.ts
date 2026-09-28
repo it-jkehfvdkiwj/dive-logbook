@@ -103,8 +103,12 @@ function orderByFor(sort: DiveFilters["sort"]): Prisma.DiveOrderByWithRelationIn
 // Queries
 // ---------------------------------------------------------------------------
 
-export async function listDives(filters: Partial<DiveFilters> = {}, take?: number): Promise<DiveListItem[]> {
-  const and: Prisma.DiveWhereInput[] = [];
+export async function listDives(
+  userId: string,
+  filters: Partial<DiveFilters> = {},
+  take?: number,
+): Promise<DiveListItem[]> {
+  const and: Prisma.DiveWhereInput[] = [{ userId }];
 
   if (filters.q) {
     const contains = { contains: filters.q, mode: "insensitive" as const };
@@ -128,7 +132,7 @@ export async function listDives(filters: Partial<DiveFilters> = {}, take?: numbe
   if (filters.maxDepth != null) and.push({ maxDepth: { lte: filters.maxDepth } });
 
   const dives = await db.dive.findMany({
-    where: and.length ? { AND: and } : undefined,
+    where: { AND: and },
     include: listInclude,
     orderBy: orderByFor(filters.sort ?? "date_desc"),
     take,
@@ -136,17 +140,17 @@ export async function listDives(filters: Partial<DiveFilters> = {}, take?: numbe
   return dives.map(toListItem);
 }
 
-export async function countDives(): Promise<number> {
-  return db.dive.count();
+export async function countDives(userId: string): Promise<number> {
+  return db.dive.count({ where: { userId } });
 }
 
-export async function listFavoriteDives(take?: number) {
-  return listDives({ favorite: true }, take);
+export async function listFavoriteDives(userId: string, take?: number) {
+  return listDives(userId, { favorite: true }, take);
 }
 
-export async function getDive(id: string): Promise<DiveDetail | null> {
-  const d = await db.dive.findUnique({
-    where: { id },
+export async function getDive(userId: string, id: string): Promise<DiveDetail | null> {
+  const d = await db.dive.findFirst({
+    where: { id, userId },
     include: {
       ...listInclude,
       sightings: {
@@ -199,21 +203,21 @@ export async function getDive(id: string): Promise<DiveDetail | null> {
   };
 }
 
-export async function getDiveOrThrow(id: string): Promise<DiveDetail> {
-  const dive = await getDive(id);
+export async function getDiveOrThrow(userId: string, id: string): Promise<DiveDetail> {
+  const dive = await getDive(userId, id);
   if (!dive) throw new NotFoundError("Dive");
   return dive;
 }
 
 /** Nächste freie Dive-Nummer als Vorschlag im Formular. */
-export async function suggestNextDiveNumber(): Promise<number> {
-  const agg = await db.dive.aggregate({ _max: { diveNumber: true } });
+export async function suggestNextDiveNumber(userId: string): Promise<number> {
+  const agg = await db.dive.aggregate({ where: { userId }, _max: { diveNumber: true } });
   return (agg._max.diveNumber ?? 0) + 1;
 }
 
-export async function listDiveTypes(): Promise<string[]> {
+export async function listDiveTypes(userId: string): Promise<string[]> {
   const rows = await db.dive.findMany({
-    where: { diveType: { not: null } },
+    where: { userId, diveType: { not: null } },
     select: { diveType: true },
     distinct: ["diveType"],
     orderBy: { diveType: "asc" },
@@ -225,9 +229,10 @@ export async function listDiveTypes(): Promise<string[]> {
 // Mutations
 // ---------------------------------------------------------------------------
 
-export async function createDive(input: DiveInput): Promise<{ id: string }> {
+export async function createDive(userId: string, input: DiveInput): Promise<{ id: string }> {
   return db.$transaction(async (tx) => {
     const diveSiteId = await resolveSite(
+      userId,
       {
         name: input.siteName,
         location: input.location,
@@ -238,19 +243,20 @@ export async function createDive(input: DiveInput): Promise<{ id: string }> {
       tx,
     );
     const dive = await tx.dive.create({
-      data: { ...diveData(input), diveSiteId, source: "manual" },
+      data: { ...diveData(input), userId, diveSiteId, source: "manual" },
       select: { id: true },
     });
     return dive;
   });
 }
 
-export async function updateDive(id: string, input: DiveInput): Promise<{ id: string }> {
+export async function updateDive(userId: string, id: string, input: DiveInput): Promise<{ id: string }> {
   return db.$transaction(async (tx) => {
-    const existing = await tx.dive.findUnique({ where: { id }, include: { diveSite: true } });
+    const existing = await tx.dive.findFirst({ where: { id, userId }, include: { diveSite: true } });
     if (!existing) throw new NotFoundError("Dive");
 
     const diveSiteId = await resolveSite(
+      userId,
       {
         name: input.siteName,
         location: input.location,
@@ -285,8 +291,12 @@ export async function updateDive(id: string, input: DiveInput): Promise<{ id: st
   });
 }
 
-export async function setFavorite(id: string, favorite: boolean): Promise<{ id: string; favorite: boolean }> {
-  const exists = await db.dive.findUnique({ where: { id }, select: { id: true } });
+export async function setFavorite(
+  userId: string,
+  id: string,
+  favorite: boolean,
+): Promise<{ id: string; favorite: boolean }> {
+  const exists = await db.dive.findFirst({ where: { id, userId }, select: { id: true } });
   if (!exists) throw new NotFoundError("Dive");
   return db.dive.update({ where: { id }, data: { favorite }, select: { id: true, favorite: true } });
 }
@@ -296,10 +306,10 @@ export async function setFavorite(id: string, favorite: boolean): Promise<{ id: 
  * Species bleiben erhalten – sie verschwinden nur aus der Life List,
  * wenn keine weitere Sichtung existiert.
  */
-export async function deleteDive(id: string): Promise<{ deletedSightings: number }> {
+export async function deleteDive(userId: string, id: string): Promise<{ deletedSightings: number }> {
   return db.$transaction(async (tx) => {
-    const dive = await tx.dive.findUnique({
-      where: { id },
+    const dive = await tx.dive.findFirst({
+      where: { id, userId },
       select: { _count: { select: { sightings: true } } },
     });
     if (!dive) throw new NotFoundError("Dive");

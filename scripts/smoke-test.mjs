@@ -190,6 +190,39 @@ async function main() {
   const bad = await call("POST", "/api/import/json", [{ date: "x" }]);
   check("invalid import record is skipped & reported", bad.data?.errors?.length === 1);
 
+  console.log("\nMulti-user isolation");
+  if (process.env.APP_PASSWORD) {
+    const buddyPw = `buddy-${stamp}`;
+    const created = await call("POST", "/api/users", { name: "Buddy", password: buddyPw });
+    check("admin creates second user", created.status === 201, created);
+    const dupe = await call("POST", "/api/users", { name: "Copy", password: buddyPw });
+    check("same password cannot be used twice", dupe.status === 409);
+    const mine = await call("POST", "/api/dives", diveBody({ siteName: `Owner Only ${stamp}` }));
+    const ownerCookie = cookie;
+    const res = await fetch(`${BASE}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: buddyPw }),
+    });
+    cookie = (res.headers.get("set-cookie") ?? "").split(";")[0];
+    check("buddy logs in with own password", res.ok);
+    const buddyDives = await call("GET", "/api/dives");
+    check("buddy sees none of the owner's dives", !buddyDives.data.dives.some((d) => d.id === mine.data.id));
+    check("buddy cannot open owner's dive", (await call("GET", `/api/dives/${mine.data.id}`)).status === 404);
+    check("buddy cannot delete owner's dive", (await call("DELETE", `/api/dives/${mine.data.id}`)).status === 404);
+    check("buddy cannot manage users", (await call("GET", "/api/users")).status === 403);
+    const bd = await call("POST", "/api/dives", diveBody({ siteName: `Buddy Reef ${stamp}` }));
+    check("buddy creates own dive", bd.status === 201);
+    const buddyLife = await call("GET", "/api/species?view=seen");
+    check("buddy's life list starts empty", buddyLife.data.species.length === 0, buddyLife.data.species.length);
+    cookie = ownerCookie;
+    const ownerDives = await call("GET", "/api/dives");
+    check("owner does not see buddy's dive", !ownerDives.data.dives.some((d) => d.id === bd.data.id));
+    await call("DELETE", `/api/dives/${mine.data.id}`);
+    const del = await call("DELETE", `/api/users/${created.data.id}`);
+    check("admin deletes buddy (incl. dives)", del.status === 200);
+  }
+
   console.log("\nCleanup");
   await call("DELETE", `/api/dives/${importedId}`);
   const delSp = await call("DELETE", `/api/species/${speciesId}`);

@@ -44,12 +44,12 @@ async function seedCatalog() {
   console.log(`Species catalog: ${created} created, ${SPECIES_CATALOG.length - created} already present`);
 }
 
-async function seedDemoDives(firstRun: boolean) {
+async function seedDemoDives(firstRun: boolean, userId: string) {
   if (!firstRun) {
     console.log("Skipping demo dives – not the first run (delete demo data anytime in Settings).");
     return;
   }
-  const count = await db.dive.count();
+  const count = await db.dive.count({ where: { userId } });
   if (count > 0) {
     console.log(`Skipping demo dives – database already contains ${count} dive(s).`);
     return;
@@ -57,11 +57,12 @@ async function seedDemoDives(firstRun: boolean) {
 
   for (const d of DEMO_DIVES) {
     const site =
-      (await db.diveSite.findFirst({ where: { name: d.site.name, country: d.site.country } })) ??
-      (await db.diveSite.create({ data: { ...d.site, source: "demo" } }));
+      (await db.diveSite.findFirst({ where: { userId, name: d.site.name, country: d.site.country } })) ??
+      (await db.diveSite.create({ data: { ...d.site, userId, source: "demo" } }));
 
     const dive = await db.dive.create({
       data: {
+        userId,
         diveNumber: d.diveNumber,
         date: new Date(`${d.date}T00:00:00.000Z`),
         startTime: d.startTime,
@@ -96,23 +97,23 @@ async function seedDemoDives(firstRun: boolean) {
   console.log(`Demo dives: ${DEMO_DIVES.length} created`);
 }
 
-/** Legt die Settings an. Gibt true zurück, wenn die DB zum ersten Mal befüllt wird. */
-async function seedSettings(): Promise<boolean> {
-  const existing = await db.appSettings.findUnique({ where: { id: 1 }, select: { id: true } });
-  if (existing) return false;
-  await db.appSettings.upsert({
-    where: { id: 1 },
-    update: {},
-    create: { id: 1, displayName: process.env.SEED_DISPLAY_NAME ?? "Quirin" },
+const OWNER_ID = "owner";
+
+/** Legt beim allerersten Lauf den Owner (Admin) an. Gibt true zurück, wenn die DB neu ist. */
+async function seedOwner(): Promise<boolean> {
+  const users = await db.user.count();
+  if (users > 0) return false;
+  await db.user.create({
+    data: { id: OWNER_ID, name: process.env.SEED_DISPLAY_NAME ?? "Quirin", isAdmin: true },
   });
   return true;
 }
 
 async function main() {
   const withDemo = !process.argv.includes("--no-demo") && process.env.SEED_DEMO !== "false";
-  const firstRun = await seedSettings();
+  const firstRun = await seedOwner();
   await seedCatalog();
-  if (withDemo) await seedDemoDives(firstRun || process.argv.includes("--force-demo"));
+  if (withDemo) await seedDemoDives(firstRun || process.argv.includes("--force-demo"), OWNER_ID);
 }
 
 main()

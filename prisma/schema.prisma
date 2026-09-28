@@ -13,10 +13,31 @@ datasource db {
   provider = "postgresql"
 }
 
+/// Benutzer. Login nur per Passwort: jedes Passwort gehört zu genau einem Benutzer.
+/// Der erste Benutzer ("owner") ist Admin und übernimmt beim Upgrade alle Bestandsdaten.
+model User {
+  id                       String   @id @default(cuid())
+  name                     String
+  /// scrypt-Hash des Passworts (deterministisch → eindeutig, erlaubt Login ohne Benutzernamen).
+  /// NULL = Konto noch nicht beansprucht (Owner loggt sich mit APP_PASSWORD ein).
+  passwordHash             String?  @unique
+  isAdmin                  Boolean  @default(false)
+  /// Wenn true, überschreibt ein Sync auch manuell geänderte Felder.
+  syncOverwriteManualEdits Boolean  @default(false)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  dives      Dive[]
+  diveSites  DiveSite[]
+  importRuns ImportRun[]
+}
+
 /// Tauchplatz. Normalisiert, damit Statistiken ("verschiedene Tauchplätze"),
 /// eine spätere Weltkarte und externe Platz-IDs (z. B. SSI) sauber möglich sind.
 model DiveSite {
   id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   name       String
   location   String? // Region / Ort, z. B. "Shelly Beach"
   country    String?
@@ -29,13 +50,16 @@ model DiveSite {
 
   dives Dive[]
 
-  @@unique([source, externalId])
+  @@unique([userId, source, externalId])
+  @@index([userId])
   @@index([name])
   @@index([country])
 }
 
 model Dive {
   id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   diveNumber Int?
   /// Kalenderdatum des Tauchgangs (ohne Zeitzone – Ortszeit am Tauchplatz)
   date       DateTime  @db.Date
@@ -75,12 +99,15 @@ model Dive {
   sightings Sighting[]
   photos    DivePhoto[]
 
-  /// Verhindert doppelte Importe desselben externen Tauchgangs.
-  @@unique([source, externalId])
+  /// Verhindert doppelte Importe desselben externen Tauchgangs (pro Benutzer).
+  @@unique([userId, source, externalId])
+  @@index([userId, date])
   @@index([date])
   @@index([favorite])
 }
 
+/// Arten-Katalog – gemeinsam für alle Benutzer. Die Life List ist pro Benutzer
+/// (Arten mit Sichtungen in den eigenen Dives).
 model Species {
   id             String   @id @default(cuid())
   commonName     String
@@ -145,6 +172,8 @@ model DivePhoto {
 /// Protokoll eines Imports/Syncs aus einer externen Quelle.
 model ImportRun {
   id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   source     String
   startedAt  DateTime  @default(now())
   finishedAt DateTime?
@@ -155,12 +184,6 @@ model ImportRun {
   error      String?
   /// Diagnose-Protokoll (nur Feldnamen/Zähler, keine Zugangsdaten)
   log        String?
-}
 
-/// Singleton (id = 1) für App-Einstellungen.
-model AppSettings {
-  id                       Int     @id @default(1)
-  displayName              String  @default("Diver")
-  /// Wenn true, überschreibt ein Sync auch manuell geänderte Felder.
-  syncOverwriteManualEdits Boolean @default(false)
+  @@index([userId, startedAt])
 }

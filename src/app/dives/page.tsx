@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { diveFiltersSchema } from "@/lib/validation/dive";
 import { countDives, listDiveTypes, listDives } from "@/services/diveService";
 import { listCountries, listLocations } from "@/services/diveSiteService";
+import { requirePageUser } from "@/lib/current-user";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Dives" };
@@ -20,12 +21,13 @@ export default async function DivesPage({ searchParams }: PageProps<"/dives">) {
     Object.entries(await searchParams).map(([k, v]) => [k, Array.isArray(v) ? v[0] : v]),
   );
   const filters = diveFiltersSchema.parse(raw);
+  const user = await requirePageUser();
   const [dives, total, countries, locations, diveTypes] = await Promise.all([
-    listDives(filters),
-    countDives(),
-    listCountries(),
-    listLocations(),
-    listDiveTypes(),
+    listDives(user.id, filters),
+    countDives(user.id),
+    listCountries(user.id),
+    listLocations(user.id),
+    listDiveTypes(user.id),
   ]);
   const filtered = Boolean(
     filters.q || filters.favorite || filters.country || filters.location || filters.diveType || filters.from || filters.to || filters.minDepth != null || filters.maxDepth != null,

@@ -24,7 +24,7 @@ export function ProfileForm({ displayName, syncOverwriteManualEdits }: ProfileFo
     setState("saving");
     setError(null);
     try {
-      await api.put("/api/settings", next);
+      await api.put("/api/me", { name: next.displayName, syncOverwriteManualEdits: next.syncOverwriteManualEdits });
       setState("saved");
       router.refresh();
       setTimeout(() => setState("idle"), 1500);

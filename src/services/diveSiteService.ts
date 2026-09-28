@@ -19,12 +19,12 @@ type Tx = Prisma.TransactionClient;
  * - Manuelle Plätze über Name + Location + Country (case-insensitiv).
  * Koordinaten werden übernommen, wenn sie angegeben sind.
  */
-export async function resolveSite(input: SiteInput, tx: Tx = db): Promise<string> {
+export async function resolveSite(userId: string, input: SiteInput, tx: Tx = db): Promise<string> {
   const source = input.source ?? "manual";
 
   if (input.externalId) {
     const existing = await tx.diveSite.findUnique({
-      where: { source_externalId: { source, externalId: input.externalId } },
+      where: { userId_source_externalId: { userId, source, externalId: input.externalId } },
     });
     if (existing) {
       await tx.diveSite.update({
@@ -42,6 +42,7 @@ export async function resolveSite(input: SiteInput, tx: Tx = db): Promise<string
   } else {
     const existing = await tx.diveSite.findFirst({
       where: {
+        userId,
         name: { equals: input.name, mode: "insensitive" },
         location: input.location ? { equals: input.location, mode: "insensitive" } : null,
         country: input.country ? { equals: input.country, mode: "insensitive" } : null,
@@ -60,6 +61,7 @@ export async function resolveSite(input: SiteInput, tx: Tx = db): Promise<string
 
   const created = await tx.diveSite.create({
     data: {
+      userId,
       name: input.name,
       location: input.location,
       country: input.country,
@@ -77,9 +79,9 @@ export async function deleteOrphanSites(tx: Tx = db): Promise<void> {
   await tx.diveSite.deleteMany({ where: { dives: { none: {} } } });
 }
 
-export async function listCountries(): Promise<string[]> {
+export async function listCountries(userId: string): Promise<string[]> {
   const rows = await db.diveSite.findMany({
-    where: { country: { not: null }, dives: { some: {} } },
+    where: { userId, country: { not: null }, dives: { some: {} } },
     select: { country: true },
     distinct: ["country"],
     orderBy: { country: "asc" },
@@ -87,9 +89,9 @@ export async function listCountries(): Promise<string[]> {
   return rows.map((r) => r.country!).filter(Boolean);
 }
 
-export async function listLocations(): Promise<string[]> {
+export async function listLocations(userId: string): Promise<string[]> {
   const rows = await db.diveSite.findMany({
-    where: { location: { not: null }, dives: { some: {} } },
+    where: { userId, location: { not: null }, dives: { some: {} } },
     select: { location: true },
     distinct: ["location"],
     orderBy: { location: "asc" },

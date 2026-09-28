@@ -2,23 +2,32 @@ import { AppError, ValidationError } from "@/lib/errors";
 import { SsiApiError } from "@/importers/ssi/client";
 import { SSIImporter, ssiCredentialsFromEnv } from "@/importers/ssiImporter";
 import { SSICsvImporter } from "@/importers/ssiCsvImporter";
+import { db } from "@/lib/db";
 import { runImport } from "./importService";
 
-export function isSsiConfigured(): boolean {
-  return ssiCredentialsFromEnv() !== null;
+interface Actor {
+  id: string;
+  isAdmin: boolean;
 }
 
-/** Download aller SSI-Dives. Ohne übergebene Zugangsdaten werden SSI_EMAIL/SSI_PASSWORD genutzt. */
-export async function syncSsi(credentials?: { email?: string | null; password?: string | null }) {
+/** SSI_EMAIL/SSI_PASSWORD (Vercel) gehören zum Admin-Konto. */
+export function isSsiConfiguredFor(user: Actor): boolean {
+  return user.isAdmin && ssiCredentialsFromEnv() !== null;
+}
+
+/** Download aller SSI-Dives für den Benutzer. Ohne Zugangsdaten: SSI_EMAIL/SSI_PASSWORD (nur Admin). */
+export async function syncSsi(user: Actor, credentials?: { email?: string | null; password?: string | null }) {
   const creds =
     credentials?.email && credentials?.password
       ? { email: credentials.email.trim(), password: credentials.password }
-      : ssiCredentialsFromEnv();
+      : user.isAdmin
+        ? ssiCredentialsFromEnv()
+        : null;
   if (!creds) {
-    throw new ValidationError("No SSI login configured. Enter your SSI e-mail and password, or set SSI_EMAIL and SSI_PASSWORD on Vercel.");
+    throw new ValidationError("Please enter your SSI e-mail and password.");
   }
   try {
-    return await runImport(new SSIImporter(creds.email, creds.password));
+    return await runImport(new SSIImporter(creds.email, creds.password), user.id);
   } catch (err) {
     if (err instanceof SsiApiError) {
       throw new AppError(err.message, err.kind === "auth" ? 400 : 502, `ssi_${err.kind}`);
@@ -27,9 +36,16 @@ export async function syncSsi(credentials?: { email?: string | null; password?: 
   }
 }
 
-export async function importSsiCsv(csv: string) {
+/** Nächtlicher Cron: synchronisiert das Admin-Konto mit den Vercel-Zugangsdaten. */
+export async function syncSsiForAdmin() {
+  const admin = await db.user.findFirst({ where: { isAdmin: true }, orderBy: { createdAt: "asc" } });
+  if (!admin || !ssiCredentialsFromEnv()) return null;
+  return syncSsi({ id: admin.id, isAdmin: true });
+}
+
+export async function importSsiCsv(userId: string, csv: string) {
   try {
-    return await runImport(new SSICsvImporter(csv));
+    return await runImport(new SSICsvImporter(csv), userId);
   } catch (err) {
     if (err instanceof AppError) throw err;
     throw new ValidationError(err instanceof Error ? err.message : "Could not read this CSV file.");

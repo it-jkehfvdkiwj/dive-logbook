@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/common/empty-state";
 import { getCategory } from "@/lib/categories";
 import { formatTotalTime } from "@/lib/format";
 import { getOverviewStats } from "@/services/statsService";
+import { requirePageUser } from "@/lib/current-user";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Statistics" };
@@ -13,7 +14,8 @@ export const metadata = { title: "Statistics" };
 const oneDecimal = (v: number | null) => (v == null ? "–" : v.toFixed(1));
 
 export default async function StatsPage() {
-  const s = await getOverviewStats();
+  const user = await requirePageUser();
+  const s = await getOverviewStats(user.id);
 
   if (s.totalDives === 0) {
     return (

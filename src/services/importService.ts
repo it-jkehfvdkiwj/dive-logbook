@@ -8,7 +8,6 @@ import {
   type ImportResult,
 } from "@/importers/types";
 import { deleteOrphanSites, resolveSite } from "./diveSiteService";
-import { getSettings } from "./settingsService";
 import { uniqueSlug } from "./speciesService";
 
 type Tx = Prisma.TransactionClient;
@@ -110,9 +109,9 @@ async function syncSightings(tx: Tx, source: string, diveId: string, sightings: 
  *   Import → externalId vergleichen → neue Dives anlegen → bestehende aktualisieren
  *   → manuell geänderte Felder nicht überschreiben (außer in Settings erlaubt).
  */
-export async function runImport(importer: DiveImporter): Promise<ImportResult> {
-  const settings = await getSettings();
-  const run = await db.importRun.create({ data: { source: importer.source } });
+export async function runImport(importer: DiveImporter, userId: string): Promise<ImportResult> {
+  const settings = await db.user.findUniqueOrThrow({ where: { id: userId } });
+  const run = await db.importRun.create({ data: { source: importer.source, userId } });
   const result: ImportResult = { runId: run.id, source: importer.source, created: 0, updated: 0, skipped: 0, errors: [] };
 
   try {
@@ -120,7 +119,9 @@ export async function runImport(importer: DiveImporter): Promise<ImportResult> {
 
     // Performance: bestehende Dives dieser Quelle einmal laden, Sites pro Lauf cachen.
     // Unveränderte Dives kosten so keine Einzel-Queries (wichtig bei vielen Dives / weit entfernter DB).
-    const existingDives = await db.dive.findMany({ where: { source: importer.source, externalId: { not: null } } });
+    const existingDives = await db.dive.findMany({
+      where: { userId, source: importer.source, externalId: { not: null } },
+    });
     const existingByExt = new Map(existingDives.map((d) => [d.externalId!, d]));
     const siteCache = new Map<string, string>();
     const unchangedIds: string[] = [];
@@ -143,7 +144,7 @@ export async function runImport(importer: DiveImporter): Promise<ImportResult> {
         [dive.site.name, dive.site.location ?? "", dive.site.country ?? ""].join("|").toLowerCase();
       let diveSiteId = siteCache.get(siteKey);
       if (!diveSiteId) {
-        diveSiteId = await resolveSite({
+        diveSiteId = await resolveSite(userId, {
           name: dive.site.name,
           location: dive.site.location ?? null,
           country: dive.site.country ?? null,
@@ -163,6 +164,7 @@ export async function runImport(importer: DiveImporter): Promise<ImportResult> {
           const created = await tx.dive.create({
             data: {
               ...data,
+              userId,
               diveSiteId: siteId,
               source: importer.source,
               externalId: dive.externalId,
@@ -251,6 +253,6 @@ function buildLog(importer: DiveImporter, result: ImportResult): string | null {
   return lines.length ? lines.join("\n").slice(0, 8000) : null;
 }
 
-export async function listImportRuns(take = 10) {
-  return db.importRun.findMany({ orderBy: { startedAt: "desc" }, take });
+export async function listImportRuns(userId: string, take = 10) {
+  return db.importRun.findMany({ where: { userId }, orderBy: { startedAt: "desc" }, take });
 }

@@ -14,24 +14,24 @@ import { cn } from "@/lib/utils";
 import { listDives, listFavoriteDives } from "@/services/diveService";
 import { listRecentlySeen } from "@/services/speciesService";
 import { getOverviewStats } from "@/services/statsService";
-import { getSettings } from "@/services/settingsService";
+import { requirePageUser } from "@/lib/current-user";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  const [settings, stats, recent, favorites, recentlySeen] = await Promise.all([
-    getSettings(),
-    getOverviewStats(),
-    listDives({}, 5),
-    listFavoriteDives(12),
-    listRecentlySeen(8),
+  const user = await requirePageUser();
+  const [stats, recent, favorites, recentlySeen] = await Promise.all([
+    getOverviewStats(user.id),
+    listDives(user.id, {}, 5),
+    listFavoriteDives(user.id, 12),
+    listRecentlySeen(user.id, 8),
   ]);
 
   return (
     <>
       <PageHeader
         eyebrow="Dive Log"
-        title={<Greeting name={settings.displayName} />}
+        title={<Greeting name={user.name} />}
         actions={
           <Link href="/dives/new" className={cn(buttonVariants({ size: "icon" }), "rounded-full lg:hidden")} aria-label="Add dive">
             <Plus className="!size-6" />

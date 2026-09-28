@@ -17,17 +17,20 @@ import {
 } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { getDive } from "@/services/diveService";
+import { requirePageUser } from "@/lib/current-user";
 
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: PageProps<"/dives/[id]">): Promise<Metadata> {
-  const dive = await getDive((await params).id);
+  const user = await requirePageUser();
+  const dive = await getDive(user.id, (await params).id);
   return { title: dive ? dive.site.name : "Dive" };
 }
 
 export default async function DiveDetailPage({ params }: PageProps<"/dives/[id]">) {
   const { id } = await params;
-  const dive = await getDive(id);
+  const user = await requirePageUser();
+  const dive = await getDive(user.id, id);
   if (!dive) notFound();
 
   const place = [dive.site.location, dive.site.country].filter(Boolean).join(", ");

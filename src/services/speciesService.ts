@@ -109,11 +109,14 @@ async function assertScientificNameFree(name: string | null, tx: Tx, excludeId?:
 // ---------------------------------------------------------------------------
 
 /** Life List (view = "seen") oder kompletter Katalog (view = "all"). */
-export async function listSpecies(filters: Partial<SpeciesFilters> = {}): Promise<SpeciesListItem[]> {
+export async function listSpecies(
+  userId: string,
+  filters: Partial<SpeciesFilters> = {},
+): Promise<SpeciesListItem[]> {
   const and: Prisma.SpeciesWhereInput[] = [];
   const view = filters.view ?? "seen";
 
-  if (view === "seen") and.push({ sightings: { some: {} } });
+  if (view === "seen") and.push({ sightings: { some: { dive: { userId } } } });
   if (filters.q) {
     const contains = { contains: filters.q, mode: "insensitive" as const };
     and.push({ OR: [{ commonName: contains }, { scientificName: contains }, { category: contains }] });
@@ -121,13 +124,15 @@ export async function listSpecies(filters: Partial<SpeciesFilters> = {}): Promis
   if (filters.category) and.push({ category: { equals: filters.category, mode: "insensitive" } });
   if (filters.country) {
     and.push({
-      sightings: { some: { dive: { diveSite: { country: { equals: filters.country, mode: "insensitive" } } } } },
+      sightings: {
+        some: { dive: { userId, diveSite: { country: { equals: filters.country, mode: "insensitive" } } } },
+      },
     });
   }
 
   const rows = await db.species.findMany({
     where: and.length ? { AND: and } : undefined,
-    include: { sightings: { select: sightingDiveSelect } },
+    include: { sightings: { where: { dive: { userId } }, select: sightingDiveSelect } },
     orderBy: { commonName: "asc" },
   });
 
@@ -153,22 +158,30 @@ export async function listSpecies(filters: Partial<SpeciesFilters> = {}): Promis
 }
 
 /** Schnelle Suche für den "Add Marine Life"-Dialog. */
-export async function searchSpecies(q: string, take = 20): Promise<(SpeciesSummary & { sightingCount: number })[]> {
+export async function searchSpecies(
+  userId: string,
+  q: string,
+  take = 20,
+): Promise<(SpeciesSummary & { sightingCount: number })[]> {
   const term = q.trim();
   const contains = { contains: term, mode: "insensitive" as const };
   const rows = await db.species.findMany({
     where: term ? { OR: [{ commonName: contains }, { scientificName: contains }, { category: contains }] } : undefined,
-    include: { _count: { select: { sightings: true } } },
-    orderBy: [{ sightings: { _count: "desc" } }, { commonName: "asc" }],
-    take,
+    include: { _count: { select: { sightings: { where: { dive: { userId } } } } } },
+    orderBy: { commonName: "asc" },
+    take: 200,
   });
-  return rows.map((r) => ({ ...toSummary(r), sightingCount: r._count.sightings }));
+  // Eigene, oft gesehene Arten zuerst
+  return rows
+    .map((r) => ({ ...toSummary(r), sightingCount: r._count.sightings }))
+    .sort((a, b) => b.sightingCount - a.sightingCount || a.commonName.localeCompare(b.commonName))
+    .slice(0, take);
 }
 
-export async function getSpecies(idOrSlug: string): Promise<SpeciesDetail | null> {
+export async function getSpecies(userId: string, idOrSlug: string): Promise<SpeciesDetail | null> {
   const s = await db.species.findFirst({
     where: { OR: [{ id: idOrSlug }, { slug: idOrSlug }] },
-    include: { sightings: { select: sightingDiveSelect } },
+    include: { sightings: { where: { dive: { userId } }, select: sightingDiveSelect } },
   });
   if (!s) return null;
 
@@ -210,8 +223,12 @@ export async function getSpeciesForEdit(idOrSlug: string) {
 }
 
 /** Zuletzt gesichtete Arten (für das Dashboard). */
-export async function listRecentlySeen(take = 8): Promise<(SpeciesSummary & { lastSeen: SightingRef })[]> {
+export async function listRecentlySeen(
+  userId: string,
+  take = 8,
+): Promise<(SpeciesSummary & { lastSeen: SightingRef })[]> {
   const sightings = await db.sighting.findMany({
+    where: { dive: { userId } },
     orderBy: [{ dive: { date: "desc" } }, { createdAt: "desc" }],
     select: { ...sightingDiveSelect, species: true },
     take: take * 4,
@@ -227,9 +244,9 @@ export async function listRecentlySeen(take = 8): Promise<(SpeciesSummary & { la
   return result;
 }
 
-export async function listSpeciesCountries(): Promise<string[]> {
+export async function listSpeciesCountries(userId: string): Promise<string[]> {
   const rows = await db.diveSite.findMany({
-    where: { country: { not: null }, dives: { some: { sightings: { some: {} } } } },
+    where: { userId, country: { not: null }, dives: { some: { sightings: { some: {} } } } },
     select: { country: true },
     distinct: ["country"],
     orderBy: { country: "asc" },
@@ -267,19 +284,22 @@ export async function updateSpecies(id: string, input: SpeciesInput): Promise<Sp
   });
 }
 
-export async function countSightingsForSpecies(id: string): Promise<number> {
-  return db.sighting.count({ where: { speciesId: id } });
-}
-
-/** Löscht eine Art inkl. aller Sichtungen (Cascade). Die UI warnt vorher. */
-export async function deleteSpecies(id: string): Promise<{ deletedSightings: number }> {
+/**
+ * Löscht eine Art inkl. der eigenen Sichtungen (Cascade). Die UI warnt vorher.
+ * Der Katalog ist gemeinsam: Hat ein anderer Benutzer die Art geloggt, wird nicht gelöscht.
+ */
+export async function deleteSpecies(userId: string, id: string): Promise<{ deletedSightings: number }> {
   return db.$transaction(async (tx) => {
-    const s = await tx.species.findUnique({
-      where: { id },
-      select: { _count: { select: { sightings: true } } },
-    });
+    const s = await tx.species.findUnique({ where: { id }, select: { id: true } });
     if (!s) throw new NotFoundError("Species");
+    const [own, others] = await Promise.all([
+      tx.sighting.count({ where: { speciesId: id, dive: { userId } } }),
+      tx.sighting.count({ where: { speciesId: id, dive: { userId: { not: userId } } } }),
+    ]);
+    if (others > 0) {
+      throw new ConflictError("This species is also used in another diver's logbook and cannot be deleted.");
+    }
     await tx.species.delete({ where: { id } });
-    return { deletedSightings: s._count.sightings };
+    return { deletedSightings: own };
   });
 }

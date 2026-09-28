@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { SESSION_COOKIE, isAuthEnabled, safeEqual, sessionToken } from "@/lib/auth";
+import { SESSION_COOKIE, isAuthEnabled, verifySession } from "@/lib/auth";
 
 // Öffentliche Pfade: Login, PWA-Dateien (Safari lädt Manifest/Icons ohne Cookie),
 // Cron-Route (prüft selbst CRON_SECRET)
@@ -12,7 +12,7 @@ export async function proxy(request: NextRequest) {
   if (PUBLIC_PATHS.includes(pathname)) return NextResponse.next();
 
   const cookie = request.cookies.get(SESSION_COOKIE)?.value;
-  if (cookie && safeEqual(cookie, await sessionToken())) return NextResponse.next();
+  if (await verifySession(cookie)) return NextResponse.next();
 
   if (pathname.startsWith("/api/")) {
     return NextResponse.json({ error: { code: "unauthorized", message: "Please log in." } }, { status: 401 });

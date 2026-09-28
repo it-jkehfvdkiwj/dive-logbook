@@ -9,6 +9,7 @@ import { SpeciesFilters } from "@/components/species/species-filters";
 import { pluralize } from "@/lib/format";
 import { speciesFiltersSchema } from "@/lib/validation/species";
 import { listSpecies, listSpeciesCountries } from "@/services/speciesService";
+import { requirePageUser } from "@/lib/current-user";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Marine Life" };
@@ -18,10 +19,11 @@ export default async function MarineLifePage({ searchParams }: PageProps<"/marin
     Object.entries(await searchParams).map(([k, v]) => [k, Array.isArray(v) ? v[0] : v]),
   );
   const filters = speciesFiltersSchema.parse(raw);
+  const user = await requirePageUser();
   const [species, lifeList, countries] = await Promise.all([
-    listSpecies(filters),
-    listSpecies({ view: "seen", sort: "name" }),
-    listSpeciesCountries(),
+    listSpecies(user.id, filters),
+    listSpecies(user.id, { view: "seen", sort: "name" }),
+    listSpeciesCountries(user.id),
   ]);
   const categoriesInUse = [...new Set(lifeList.map((s) => s.category))];
   const hasQuery = Boolean(filters.q || filters.category || filters.country);

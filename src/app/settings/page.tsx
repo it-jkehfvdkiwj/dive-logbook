@@ -11,7 +11,10 @@ import { IMPORT_SOURCES } from "@/importers/registry";
 import { cn } from "@/lib/utils";
 import { countDemoDives } from "@/services/demoDataService";
 import { listImportRuns } from "@/services/importService";
-import { getSettings } from "@/services/settingsService";
+import { listUsers } from "@/services/userService";
+import { requirePageUser } from "@/lib/current-user";
+import { PasswordForm } from "@/components/settings/password-form";
+import { UsersPanel } from "@/components/settings/users-panel";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Settings" };
@@ -19,8 +22,13 @@ export const metadata = { title: "Settings" };
 const dateTime = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" });
 
 export default async function SettingsPage() {
-  const [settings, demoDives, runs] = await Promise.all([getSettings(), countDemoDives(), listImportRuns(8)]);
-  const ssi = ssiCredentialsFromEnv();
+  const user = await requirePageUser();
+  const [demoDives, runs, users] = await Promise.all([
+    countDemoDives(user.id),
+    listImportRuns(user.id, 8),
+    user.isAdmin ? listUsers() : Promise.resolve([]),
+  ]);
+  const ssi = user.isAdmin ? ssiCredentialsFromEnv() : null;
   const maskedEmail = ssi ? ssi.email.replace(/^(.)(.*)(@.*)$/, (_m, a: string, b: string, c: string) => a + "•".repeat(Math.min(b.length, 6)) + c) : null;
 
   return (
@@ -32,7 +40,7 @@ export default async function SettingsPage() {
         </Section>
 
         <Section title="Profile & Sync">
-          <ProfileForm displayName={settings.displayName} syncOverwriteManualEdits={settings.syncOverwriteManualEdits} />
+          <ProfileForm displayName={user.name} syncOverwriteManualEdits={user.syncOverwriteManualEdits} />
         </Section>
 
         <Section title="SSI Logbook">
@@ -93,7 +101,20 @@ export default async function SettingsPage() {
 
         {isAuthEnabled() && (
           <Section title="Account">
-            <LogoutButton />
+            <div className="flex flex-col gap-4">
+              <p className="text-[14px] text-muted-foreground">
+                Logged in as <b className="text-foreground">{user.name}</b>
+                {user.isAdmin && " (admin)"}. Your password is your login – it must be unique.
+              </p>
+              <PasswordForm />
+              <LogoutButton />
+            </div>
+          </Section>
+        )}
+
+        {user.isAdmin && isAuthEnabled() && (
+          <Section title="Users">
+            <UsersPanel currentUserId={user.id} users={users} />
           </Section>
         )}
       </div>

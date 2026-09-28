@@ -4,12 +4,14 @@ import { EmptyState } from "@/components/common/empty-state";
 import { DiveCard } from "@/components/dives/dive-card";
 import { pluralize } from "@/lib/format";
 import { listFavoriteDives } from "@/services/diveService";
+import { requirePageUser } from "@/lib/current-user";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Favorites" };
 
 export default async function FavoritesPage() {
-  const dives = await listFavoriteDives();
+  const user = await requirePageUser();
+  const dives = await listFavoriteDives(user.id);
   return (
     <>
       <PageHeader title="Favorites" subtitle={dives.length ? pluralize(dives.length, "favorite dive") : undefined} />

@@ -8,17 +8,20 @@ import { DeleteSpeciesButton } from "@/components/species/delete-species-button"
 import { getCategory } from "@/lib/categories";
 import { formatDateShort } from "@/lib/format";
 import { getSpecies } from "@/services/speciesService";
+import { requirePageUser } from "@/lib/current-user";
 
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: PageProps<"/marine-life/[id]">): Promise<Metadata> {
-  const s = await getSpecies((await params).id);
+  const user = await requirePageUser();
+  const s = await getSpecies(user.id, (await params).id);
   return { title: s?.commonName ?? "Species" };
 }
 
 export default async function SpeciesDetailPage({ params }: PageProps<"/marine-life/[id]">) {
   const { id } = await params;
-  const species = await getSpecies(id);
+  const user = await requirePageUser();
+  const species = await getSpecies(user.id, id);
   if (!species) notFound();
 
   const category = getCategory(species.category);

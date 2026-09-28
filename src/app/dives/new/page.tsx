@@ -3,16 +3,18 @@ import { DiveForm } from "@/components/dives/dive-form";
 import { emptyDiveForm } from "@/lib/dive-form-values";
 import { listDiveTypes, suggestNextDiveNumber } from "@/services/diveService";
 import { listCountries, listLocations } from "@/services/diveSiteService";
+import { requirePageUser } from "@/lib/current-user";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Add Dive" };
 
 export default async function NewDivePage() {
+  const user = await requirePageUser();
   const [nextNumber, countries, locations, diveTypes] = await Promise.all([
-    suggestNextDiveNumber(),
-    listCountries(),
-    listLocations(),
-    listDiveTypes(),
+    suggestNextDiveNumber(user.id),
+    listCountries(user.id),
+    listLocations(user.id),
+    listDiveTypes(user.id),
   ]);
   return (
     <>
