@@ -325,9 +325,13 @@ export function mapSsiLogbook(raw: Raw, animalCatalog: Raw[] | null = null): Ssi
     // Tiere: eigene Liste (über Log-ID) + verschachtelt im Eintrag
     const logRef = idRaw != null ? String(idRaw) : null;
     const sightingMap = new Map<string, RawSighting>();
+    const pendingSpeciesIds: string[] = [];
     const animalIdItems = parseIdList(d.odin_user_log_animal_ids).map((id) => {
       const hit = animalIndex.get(id);
-      if (!hit) unresolvedAnimals++;
+      if (!hit) {
+        unresolvedAnimals++;
+        pendingSpeciesIds.push(id);
+      }
       return hit ?? null;
     });
     for (const item of [
@@ -401,6 +405,7 @@ export function mapSsiLogbook(raw: Raw, animalCatalog: Raw[] | null = null): Ssi
             count: x.count,
           }))
         : undefined,
+      pendingSpeciesIds: [...new Set(pendingSpeciesIds)],
     });
   }
 

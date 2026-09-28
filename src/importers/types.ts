@@ -63,6 +63,8 @@ export const importedDiveSchema = z.object({
   diveCenter: z.string().nullish(),
   notes: z.string().nullish(),
   sightings: z.array(importedSightingSchema).optional(),
+  /** Tier-IDs der Quelle ohne bekannten Namen – werden über ExternalSpeciesMap aufgelöst */
+  pendingSpeciesIds: z.array(z.string()).optional(),
   photos: z.array(importedPhotoSchema).optional(),
 });
 

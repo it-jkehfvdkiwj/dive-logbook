@@ -22,7 +22,15 @@ import type { SightingWithSpecies } from "@/types";
 import { AddMarineLifeSheet } from "./add-marine-life-sheet";
 import { SpeciesName, SpeciesSubtitle } from "@/components/species/species-lang";
 
-export function SightingsSection({ diveId, sightings }: { diveId: string; sightings: SightingWithSpecies[] }) {
+export function SightingsSection({
+  diveId,
+  sightings,
+  pendingSpeciesCount = 0,
+}: {
+  diveId: string;
+  sightings: SightingWithSpecies[];
+  pendingSpeciesCount?: number;
+}) {
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<SightingWithSpecies | null>(null);
 
@@ -37,6 +45,18 @@ export function SightingsSection({ diveId, sightings }: { diveId: string; sighti
           <Plus /> Add Marine Life
         </Button>
       </div>
+
+      {pendingSpeciesCount > 0 && (
+        <Link
+          href="/marine-life/ssi-animals"
+          className="mb-3 flex items-center justify-between gap-3 rounded-2xl bg-accent px-4 py-3 text-[14px] text-accent-foreground active:opacity-80"
+        >
+          <span>
+            <b>{pendingSpeciesCount}</b> {pendingSpeciesCount === 1 ? "animal" : "animals"} from SSI not assigned yet
+          </span>
+          <span className="font-semibold text-primary">Assign →</span>
+        </Link>
+      )}
 
       {sightings.length === 0 ? (
         <button

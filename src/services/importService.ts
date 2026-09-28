@@ -125,6 +125,34 @@ async function syncSightings(tx: Tx, source: string, diveId: string, sightings: 
 }
 
 /**
+ * Externe Tier-IDs auflösen: bekannte (ExternalSpeciesMap) → Sighting, unbekannte → Dive.pendingExternalSpecies.
+ */
+async function applyPendingSpecies(
+  tx: Tx,
+  source: string,
+  diveId: string,
+  ids: string[],
+  extMap: Map<string, string>,
+) {
+  const unmapped: string[] = [];
+  for (const id of ids) {
+    const speciesId = extMap.get(id);
+    if (!speciesId) {
+      unmapped.push(id);
+      continue;
+    }
+    await tx.sighting.upsert({
+      where: { diveId_speciesId: { diveId, speciesId } },
+      update: {},
+      create: { diveId, speciesId, source, externalId: id },
+    });
+  }
+  await tx.dive.update({ where: { id: diveId }, data: { pendingExternalSpecies: unmapped } });
+}
+
+const sameSet = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
+
+/**
  * Führt einen Import aus:
  *   Import → externalId vergleichen → neue Dives anlegen → bestehende aktualisieren
  *   → manuell geänderte Felder nicht überschreiben (außer in Settings erlaubt).
@@ -146,6 +174,9 @@ export async function runImport(importer: DiveImporter, userId: string): Promise
     const siteCache = new Map<string, string>();
     const unchangedIds: string[] = [];
     const now = new Date();
+    const extMap = new Map(
+      (await db.externalSpeciesMap.findMany({ where: { source: importer.source } })).map((m) => [m.externalId, m.speciesId]),
+    );
 
     for (const item of raw) {
       const parsed = importedDiveSchema.safeParse(item);
@@ -202,6 +233,9 @@ export async function runImport(importer: DiveImporter, userId: string): Promise
             },
           });
           await syncSightings(tx, importer.source, created.id, dive.sightings);
+          if (dive.pendingSpeciesIds?.length) {
+            await applyPendingSpecies(tx, importer.source, created.id, dive.pendingSpeciesIds, extMap);
+          }
           existingByExt.set(dive.externalId, created);
         });
         result.created++;
@@ -217,7 +251,10 @@ export async function runImport(importer: DiveImporter, userId: string): Promise
       if (!protectedFields.has("diveSite") && existing.diveSiteId !== siteId) update.diveSiteId = siteId;
 
       const changed = Object.keys(update).length > 0;
-      if (!changed && !dive.sightings?.length && !settings.syncOverwriteManualEdits) {
+      const pending = dive.pendingSpeciesIds ?? [];
+      const pendingNeedsWork =
+        pending.some((id) => extMap.has(id)) || !sameSet(pending.filter((id) => !extMap.has(id)), existing.pendingExternalSpecies);
+      if (!changed && !dive.sightings?.length && !pendingNeedsWork && !settings.syncOverwriteManualEdits) {
         unchangedIds.push(existing.id);
         result.skipped++;
         continue;
@@ -233,6 +270,7 @@ export async function runImport(importer: DiveImporter, userId: string): Promise
           },
         });
         await syncSightings(tx, importer.source, existing.id, dive.sightings);
+        if (pendingNeedsWork) await applyPendingSpecies(tx, importer.source, existing.id, pending, extMap);
       });
       if (changed) result.updated++;
       else result.skipped++;

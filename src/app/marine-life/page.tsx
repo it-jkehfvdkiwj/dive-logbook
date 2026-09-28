@@ -10,6 +10,7 @@ import { pluralize } from "@/lib/format";
 import { speciesFiltersSchema } from "@/lib/validation/species";
 import { listSpecies, listSpeciesCountries } from "@/services/speciesService";
 import { requirePageUser } from "@/lib/current-user";
+import { countUnmappedExternalSpecies } from "@/services/externalSpeciesService";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Marine Life" };
@@ -20,10 +21,11 @@ export default async function MarineLifePage({ searchParams }: PageProps<"/marin
   );
   const filters = speciesFiltersSchema.parse(raw);
   const user = await requirePageUser();
-  const [species, lifeList, countries] = await Promise.all([
+  const [species, lifeList, countries, unmapped] = await Promise.all([
     listSpecies(user.id, filters),
     listSpecies(user.id, { view: "seen", sort: "name" }),
     listSpeciesCountries(user.id),
+    countUnmappedExternalSpecies(user.id),
   ]);
   const categoriesInUse = [...new Set(lifeList.map((s) => s.category))];
   const hasQuery = Boolean(filters.q || filters.category || filters.country);
@@ -39,6 +41,18 @@ export default async function MarineLifePage({ searchParams }: PageProps<"/marin
           </Link>
         }
       />
+
+      {unmapped > 0 && (
+        <Link
+          href="/marine-life/ssi-animals"
+          className="mb-3 flex items-center justify-between gap-3 rounded-2xl bg-accent px-4 py-3 text-accent-foreground active:opacity-80"
+        >
+          <span className="text-[14px]">
+            <b>{unmapped} animals from SSI</b> are not assigned yet
+          </span>
+          <span className="text-[14px] font-semibold text-primary">Assign →</span>
+        </Link>
+      )}
 
       <div className="sticky top-[env(safe-area-inset-top)] z-20 -mx-4 flex flex-col gap-3 bg-background/90 px-4 pb-3 pt-2 backdrop-blur-xl sm:-mx-6 sm:px-6 lg:-mx-10 lg:px-10">
         <SearchInput placeholder="Search name, scientific name, category" />

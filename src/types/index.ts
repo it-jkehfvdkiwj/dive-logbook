@@ -59,6 +59,8 @@ export interface DiveDetail extends DiveListItem {
   updatedAt: Date;
   sightings: SightingWithSpecies[];
   photos: DivePhotoItem[];
+  /** Tiere aus SSI, deren Art noch nicht zugeordnet ist */
+  pendingSpeciesCount: number;
 }
 
 export interface SpeciesSummary {

@@ -94,6 +94,9 @@ model Dive {
   /// Felder, die der Nutzer nach einem Import manuell geändert hat.
   /// Ein späterer Sync überschreibt diese Felder nicht (außer explizit konfiguriert).
   manuallyEditedFields String[]  @default([])
+  /// Externe Tier-IDs (z. B. SSI), deren Art noch unbekannt ist. Werden zu Sightings,
+  /// sobald eine Zuordnung in ExternalSpeciesMap existiert.
+  pendingExternalSpecies String[] @default([])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -136,6 +139,7 @@ model Species {
 
   sightings Sighting[]
   photos    DivePhoto[]
+  externalMappings ExternalSpeciesMap[]
 
   @@unique([source, externalId])
   @@index([commonName])
@@ -197,4 +201,17 @@ model ImportRun {
   log        String?
 
   @@index([userId, startedAt])
+}
+
+/// Zuordnung externer Tier-IDs (z. B. SSI-Tiernummer) zu einer Art im Katalog.
+/// Gilt für alle Benutzer, da die IDs aus dem globalen Katalog der Quelle stammen.
+model ExternalSpeciesMap {
+  id         String   @id @default(cuid())
+  source     String
+  externalId String
+  speciesId  String
+  species    Species  @relation(fields: [speciesId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([source, externalId])
 }

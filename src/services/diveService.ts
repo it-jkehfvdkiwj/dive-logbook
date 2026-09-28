@@ -195,6 +195,7 @@ export async function getDive(userId: string, id: string): Promise<DiveDetail | 
         imageUrl: s.species.imageUrl,
       },
     })),
+    pendingSpeciesCount: d.pendingExternalSpecies.length,
     photos: d.photos.map((p) => ({
       id: p.id,
       url: p.url,

@@ -115,7 +115,7 @@ export default async function DiveDetailPage({ params }: PageProps<"/dives/[id]"
 
       <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-[1fr_320px]">
         <div className="flex flex-col gap-8">
-          <SightingsSection diveId={dive.id} sightings={dive.sightings} />
+          <SightingsSection diveId={dive.id} sightings={dive.sightings} pendingSpeciesCount={dive.pendingSpeciesCount} />
           <PhotosSection diveId={dive.id} photos={dive.photos} />
         </div>
 

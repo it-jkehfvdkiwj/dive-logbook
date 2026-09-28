@@ -43,12 +43,37 @@ export class SSIImporter implements DiveImporter {
 
     const endpoints = process.env.SSI_ANIMAL_ENDPOINT
       ? [process.env.SSI_ANIMAL_ENDPOINT]
-      : ["get_animals", "get_animal_list", "get_animallist", "get_fish", "get_fishes", "get_marinelife", "get_wildlife", "get_species", "animals"];
+      : [
+          "get_animals",
+          "get_animal_list",
+          "get_animals_list",
+          "get_all_animals",
+          "get_logbook_animals",
+          "get_fish",
+          "get_fishes",
+          "get_marinelife",
+          "get_marine_life",
+          "get_wildlife",
+          "get_species",
+          "get_sealife",
+          "get_creatures",
+          "get_lookups",
+          "get_var",
+          "get_vars",
+          "get_masterdata",
+        ];
     for (const what of endpoints) {
       const data = await ssiTryCall(token, what);
       const list = findCatalogList(data);
-      const keys = data && typeof data === "object" && !Array.isArray(data) ? Object.keys(data).slice(0, 8).join(", ") : typeof data;
-      log.push(`animal catalog probe "${what}": ${list ? `${list.length} entries (fields: ${Object.keys(list[0]).join(", ")})` : `no list (${keys})`}`);
+      const shape =
+        data === null
+          ? "error"
+          : Array.isArray(data)
+            ? `array(${data.length})`
+            : typeof data === "object"
+              ? `keys: ${Object.keys(data as object).slice(0, 10).join(", ") || "none"}`
+              : typeof data;
+      log.push(`animal catalog probe "${what}": ${list ? `${list.length} entries (fields: ${Object.keys(list[0]).join(", ")})` : `no list (${shape})`}`);
       if (list) return list;
     }
     return null;
