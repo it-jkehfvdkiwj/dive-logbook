@@ -62,8 +62,20 @@ export class SSIImporter implements DiveImporter {
           "get_vars",
           "get_masterdata",
         ];
-    for (const what of endpoints) {
-      const data = await ssiTryCall(token, what);
+    // Laut SSI hängt die Tierliste vom Wassertyp bzw. Tauchplatz ab → auch mit Parametern probieren
+    const sites = Array.isArray(raw.logbook_sites) ? (raw.logbook_sites as Record<string, unknown>[]) : [];
+    const siteId = String(sites.find((x) => x?.odin_dive_sites_id != null)?.odin_dive_sites_id ?? "");
+    const variants: { what: string; extra: Record<string, string> }[] = endpoints.map((what) => ({ what, extra: {} }));
+    if (!process.env.SSI_ANIMAL_ENDPOINT) {
+      for (const what of ["get_animals", "get_wildlife", "get_fish", "get_site_animals", "get_dive_site_animals"]) {
+        variants.push({ what, extra: { lang: "en" } });
+        variants.push({ what, extra: { watertype: "1" } });
+        variants.push({ what, extra: { watertype_id: "1", lang: "en" } });
+        if (siteId) variants.push({ what, extra: { dive_sites_id: siteId, site_id: siteId } });
+      }
+    }
+    for (const { what, extra } of variants) {
+      const data = await ssiTryCall(token, what, extra);
       const list = findCatalogList(data);
       const shape =
         data === null
@@ -73,7 +85,9 @@ export class SSIImporter implements DiveImporter {
             : typeof data === "object"
               ? `keys: ${Object.keys(data as object).slice(0, 10).join(", ") || "none"}`
               : typeof data;
-      log.push(`animal catalog probe "${what}": ${list ? `${list.length} entries (fields: ${Object.keys(list[0]).join(", ")})` : `no list (${shape})`}`);
+      const label = Object.keys(extra).length ? `${what}?${new URLSearchParams(extra)}` : what;
+      if (!list && data === null && Object.keys(extra).length) continue; // Varianten-Fehler nicht einzeln protokollieren
+      log.push(`animal catalog probe "${label}": ${list ? `${list.length} entries (fields: ${Object.keys(list[0]).join(", ")})` : `no list (${shape})`}`);
       if (list) return list;
     }
     return null;
