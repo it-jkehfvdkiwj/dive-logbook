@@ -65,9 +65,11 @@ export interface SpeciesSummary {
   id: string;
   slug: string;
   commonName: string;
+  commonNameDe: string | null;
   scientificName: string | null;
   category: string;
   imageUrl: string | null;
+  imageAttribution: string | null;
 }
 
 export interface SightingRef {
@@ -131,7 +133,7 @@ export interface OverviewStats {
   speciesByCategory: CategoryCount[];
   countries: number;
   diveSites: number;
-  topSpecies: { id: string; commonName: string; category: string; count: number }[];
+  topSpecies: { id: string; commonName: string; commonNameDe: string | null; category: string; count: number }[];
   divesByCountry: { country: string; count: number }[];
 }
 

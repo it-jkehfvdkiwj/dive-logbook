@@ -42,7 +42,7 @@ export async function getOverviewStats(userId: string): Promise<OverviewStats> {
 
   const topSpeciesRows = await db.species.findMany({
     where: { id: { in: topRaw.map((t) => t.speciesId) } },
-    select: { id: true, commonName: true, category: true },
+    select: { id: true, commonName: true, commonNameDe: true, category: true },
   });
   const byId = new Map(topSpeciesRows.map((s) => [s.id, s]));
 
@@ -72,7 +72,9 @@ export async function getOverviewStats(userId: string): Promise<OverviewStats> {
     topSpecies: topRaw
       .map((t) => {
         const s = byId.get(t.speciesId);
-        return s ? { id: s.id, commonName: s.commonName, category: s.category, count: t._count._all } : null;
+        return s
+          ? { id: s.id, commonName: s.commonName, commonNameDe: s.commonNameDe, category: s.category, count: t._count._all }
+          : null;
       })
       .filter((x): x is NonNullable<typeof x> => x !== null),
     divesByCountry: [...divesByCountryMap.entries()]

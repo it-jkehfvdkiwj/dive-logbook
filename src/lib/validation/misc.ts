@@ -14,8 +14,9 @@ export const photoInputSchema = z.object({
 export type PhotoInput = z.output<typeof photoInputSchema>;
 
 export const profileInputSchema = z.object({
-  name: z.string().trim().min(1, "Name is required").max(60),
-  syncOverwriteManualEdits: z.boolean(),
+  name: z.string().trim().min(1, "Name is required").max(60).optional(),
+  syncOverwriteManualEdits: z.boolean().optional(),
+  speciesNameLang: z.enum(["en", "de"]).optional(),
 });
 export type ProfileInput = z.output<typeof profileInputSchema>;
 

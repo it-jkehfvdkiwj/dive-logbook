@@ -9,6 +9,7 @@ export interface UserSummary {
   name: string;
   isAdmin: boolean;
   syncOverwriteManualEdits: boolean;
+  speciesNameLang: "en" | "de";
   hasPassword: boolean;
   createdAt: Date;
   diveCount?: number;
@@ -21,6 +22,7 @@ const toSummary = (u: UserRow, diveCount?: number): UserSummary => ({
   name: u.name,
   isAdmin: u.isAdmin,
   syncOverwriteManualEdits: u.syncOverwriteManualEdits,
+  speciesNameLang: u.speciesNameLang === "de" ? "de" : "en",
   hasPassword: u.passwordHash != null,
   createdAt: u.createdAt,
   diveCount,
@@ -97,7 +99,7 @@ export async function deleteUser(actorId: string, id: string): Promise<void> {
 
 export async function updateProfile(
   userId: string,
-  input: { name: string; syncOverwriteManualEdits: boolean },
+  input: { name?: string; syncOverwriteManualEdits?: boolean; speciesNameLang?: "en" | "de" },
 ): Promise<UserSummary> {
   const u = await db.user.update({ where: { id: userId }, data: input });
   return toSummary(u);

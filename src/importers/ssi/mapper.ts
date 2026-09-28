@@ -104,6 +104,85 @@ function gearLine(d: Raw): string | null {
   return parts.length ? `SSI: ${parts.join(" · ")}` : null;
 }
 
+// ---------------------------------------------------------------------------
+// Buddy & Tiere – SSI liefert diese je nach Version als eigene Listen (verknüpft
+// über die Log-ID) oder verschachtelt im Log-Eintrag. Beides wird unterstützt.
+// ---------------------------------------------------------------------------
+
+const WILDLIFE_KEY = /(fish|animal|wildlife|marine|species|creature|sighting|critter|fauna)/i;
+const BUDDY_KEY = /(buddy|buddies|dive_?partner|divers?_?with|companion)/i;
+const LOG_REF_KEY = /(user_?log_?id|log_?id|logs?_id|dive_?log_?id)$/i;
+
+function nameOf(o: Raw, prefer: RegExp[]): string | null {
+  for (const re of prefer) {
+    for (const [k, v] of Object.entries(o)) if (re.test(k) && text(v)) return text(v);
+  }
+  return null;
+}
+
+interface RawSighting {
+  commonName: string;
+  scientificName: string | null;
+  speciesExternalId: string | null;
+  count: number | null;
+}
+
+function toSighting(o: unknown): RawSighting | null {
+  if (typeof o === "string") return text(o) ? { commonName: o.trim(), scientificName: null, speciesExternalId: null, count: null } : null;
+  if (!isRecord(o)) return null;
+  const commonName = nameOf(o, [/(common|english|en)_?name$/i, /(^|_)name(_en)?$/i, /title$/i]);
+  if (!commonName) return null;
+  const scientificName = nameOf(o, [/(scientific|latin|species)_?name$/i]);
+  const idKey = Object.keys(o).find((k) => /(fish|animal|species|wildlife|creature)s?_id$/i.test(k));
+  const count = num(pick(o, ["count", "quantity", "amount", "number"], /(count|quantity|amount)$/i));
+  return {
+    commonName,
+    scientificName: scientificName && scientificName !== commonName ? scientificName : null,
+    speciesExternalId: idKey && o[idKey] != null ? String(o[idKey]) : null,
+    count: count != null && count >= 1 ? Math.round(count) : null,
+  };
+}
+
+function toBuddyName(o: unknown): string | null {
+  if (typeof o === "string") return text(o);
+  if (!isRecord(o)) return null;
+  const first = nameOf(o, [/first_?name$/i]);
+  const last = nameOf(o, [/last_?name$/i]);
+  if (first || last) return [first, last].filter(Boolean).join(" ");
+  return nameOf(o, [/(buddy|user|diver|display|full)_?name$/i, /(^|_)name$/i]);
+}
+
+/** Top-Level-Listen (z. B. "logbook_fish") nach Log-ID gruppieren. */
+function groupByLog(raw: Raw, keyPattern: RegExp, diagnostics: string[], label: string): Map<string, unknown[]> {
+  const map = new Map<string, unknown[]>();
+  for (const [key, value] of Object.entries(raw)) {
+    if (!keyPattern.test(key) || !Array.isArray(value)) continue;
+    let linked = 0;
+    for (const item of value) {
+      if (!isRecord(item)) continue;
+      const refKey = Object.keys(item).find((k) => LOG_REF_KEY.test(k));
+      if (!refKey || item[refKey] == null) continue;
+      const ref = String(item[refKey]);
+      map.set(ref, [...(map.get(ref) ?? []), item]);
+      linked++;
+    }
+    diagnostics.push(`${label} list "${key}": ${value.length} items, ${linked} linked to dives`);
+  }
+  return map;
+}
+
+/** Verschachtelte Listen/Texte direkt im Log-Eintrag. */
+function nestedValues(d: Raw, keyPattern: RegExp): unknown[] {
+  const out: unknown[] = [];
+  for (const [k, v] of Object.entries(d)) {
+    if (!keyPattern.test(k)) continue;
+    if (Array.isArray(v)) out.push(...v);
+    else if (isRecord(v)) out.push(...Object.values(v));
+    else if (typeof v === "string" && /[a-z]/i.test(v) && !/_id$/i.test(k)) out.push(...v.split(/[,;\n]/));
+  }
+  return out;
+}
+
 export interface SsiMapResult {
   dives: ImportedDive[];
   diagnostics: string[];
@@ -122,8 +201,15 @@ export function mapSsiLogbook(raw: Raw): SsiMapResult {
   diagnostics.push(`logbook entries: ${details.length}, sites: ${sites.size}`);
   const first = details.find(isRecord);
   if (first) diagnostics.push(`entry fields: ${Object.keys(first).join(", ")}`);
-  const firstSite = Array.isArray(raw.logbook_sites) ? raw.logbook_sites.find(isRecord) : undefined;
-  if (firstSite) diagnostics.push(`site fields: ${Object.keys(firstSite).join(", ")}`);
+  for (const [key, value] of Object.entries(raw)) {
+    if (key === "logbook_details" || !Array.isArray(value)) continue;
+    const item = value.find(isRecord);
+    diagnostics.push(`list "${key}" (${value.length})${item ? `: ${Object.keys(item).join(", ")}` : ""}`);
+  }
+  const wildlifeByLog = groupByLog(raw, WILDLIFE_KEY, diagnostics, "wildlife");
+  const buddiesByLog = groupByLog(raw, BUDDY_KEY, diagnostics, "buddy");
+  let withSightings = 0;
+  let withBuddy = 0;
 
   const dives: ImportedDive[] = [];
   let skipped = 0;
@@ -146,6 +232,28 @@ export function mapSsiLogbook(raw: Raw): SsiMapResult {
     const site = siteId != null ? sites.get(String(siteId)) : undefined;
     const siteName =
       site?.name ?? text(pick(d, ["odin_user_log_dive_site_name", "site_name"], /site_name$/)) ?? "Unknown site (SSI)";
+
+    // Tiere: eigene Liste (über Log-ID) + verschachtelt im Eintrag
+    const logRef = idRaw != null ? String(idRaw) : null;
+    const sightingMap = new Map<string, RawSighting>();
+    for (const item of [...(logRef ? wildlifeByLog.get(logRef) ?? [] : []), ...nestedValues(d, WILDLIFE_KEY)]) {
+      const sgt = toSighting(item);
+      if (!sgt) continue;
+      const key = (sgt.scientificName ?? sgt.commonName).toLowerCase();
+      const prev = sightingMap.get(key);
+      sightingMap.set(key, prev ? { ...prev, count: (prev.count ?? 0) + (sgt.count ?? 0) || null } : sgt);
+    }
+    const sightings = [...sightingMap.values()];
+    if (sightings.length) withSightings++;
+
+    // Buddy: eigenes Feld, eigene Liste oder verschachtelt
+    const buddyNames = [
+      ...[text(pick(d, ["odin_user_log_buddy", "buddy", "buddy_name"], /buddy(_name|_names)?$/, /_id$/))],
+      ...(logRef ? buddiesByLog.get(logRef) ?? [] : []).map(toBuddyName),
+      ...nestedValues(d, BUDDY_KEY).map(toBuddyName),
+    ].filter((n): n is string => !!n);
+    const buddy = [...new Set(buddyNames.map((n) => n.trim()))].join(", ") || null;
+    if (buddy) withBuddy++;
 
     const comment = text(pick(d, ["odin_user_log_comment", "comment", "notes"]));
     const gear = gearLine(d);
@@ -177,13 +285,22 @@ export function mapSsiLogbook(raw: Raw): SsiMapResult {
       })(),
       waterTemperature: temp != null && temp > -3 && temp < 45 && temp !== 0 ? temp : null,
       visibility: positive(num(pick(d, ["odin_user_log_visibility_m", "visibility_m"], /visib/, /_id$/))),
-      buddy: text(pick(d, ["odin_user_log_buddy", "buddy"], /buddy(_name)?$/, /_id$/)),
+      buddy,
       diveCenter: text(pick(d, ["odin_user_log_divecenter_confirmed_name", "divecenter_name"], /divecenter.*name$/)),
       notes,
+      sightings: sightings.length
+        ? sightings.map((x) => ({
+            commonName: x.commonName,
+            scientificName: x.scientificName,
+            speciesExternalId: x.speciesExternalId,
+            count: x.count,
+          }))
+        : undefined,
     });
   }
 
   if (skipped) diagnostics.push(`skipped ${skipped} entries without a valid date`);
+  diagnostics.push(`dives with buddy: ${withBuddy}, with wildlife: ${withSightings}`);
   diagnostics.push(`mapped dives: ${dives.length}`);
   return { dives, diagnostics };
 }

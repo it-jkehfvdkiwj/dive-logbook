@@ -3,6 +3,8 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/common/theme-provider";
 import { ServiceWorkerRegister } from "@/components/common/sw-register";
 import { AppShell } from "@/components/layout/app-shell";
+import { SpeciesLangProvider } from "@/components/species/species-lang";
+import { getCurrentUser } from "@/lib/current-user";
 
 export const metadata: Metadata = {
   title: { default: "Dive Log", template: "%s · Dive Log" },
@@ -33,12 +35,15 @@ export const viewport: Viewport = {
   ],
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const user = await getCurrentUser().catch(() => null);
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
         <ThemeProvider>
-          <AppShell>{children}</AppShell>
+          <SpeciesLangProvider lang={user?.speciesNameLang ?? "en"}>
+            <AppShell>{children}</AppShell>
+          </SpeciesLangProvider>
         </ThemeProvider>
         <ServiceWorkerRegister />
       </body>

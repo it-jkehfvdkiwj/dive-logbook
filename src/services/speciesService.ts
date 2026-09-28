@@ -34,14 +34,18 @@ function toSummary(s: {
   id: string;
   slug: string;
   commonName: string;
+  commonNameDe: string | null;
   scientificName: string | null;
   category: string;
   imageUrl: string | null;
+  imageAttribution: string | null;
 }): SpeciesSummary {
   return {
     id: s.id,
     slug: s.slug,
     commonName: s.commonName,
+    commonNameDe: s.commonNameDe,
+    imageAttribution: s.imageAttribution,
     scientificName: s.scientificName,
     category: s.category,
     imageUrl: s.imageUrl,
@@ -119,7 +123,9 @@ export async function listSpecies(
   if (view === "seen") and.push({ sightings: { some: { dive: { userId } } } });
   if (filters.q) {
     const contains = { contains: filters.q, mode: "insensitive" as const };
-    and.push({ OR: [{ commonName: contains }, { scientificName: contains }, { category: contains }] });
+    and.push({
+      OR: [{ commonName: contains }, { commonNameDe: contains }, { scientificName: contains }, { category: contains }],
+    });
   }
   if (filters.category) and.push({ category: { equals: filters.category, mode: "insensitive" } });
   if (filters.country) {
@@ -166,7 +172,9 @@ export async function searchSpecies(
   const term = q.trim();
   const contains = { contains: term, mode: "insensitive" as const };
   const rows = await db.species.findMany({
-    where: term ? { OR: [{ commonName: contains }, { scientificName: contains }, { category: contains }] } : undefined,
+    where: term
+      ? { OR: [{ commonName: contains }, { commonNameDe: contains }, { scientificName: contains }, { category: contains }] }
+      : undefined,
     include: { _count: { select: { sightings: { where: { dive: { userId } } } } } },
     orderBy: { commonName: "asc" },
     take: 200,
@@ -254,6 +262,10 @@ export async function listSpeciesCountries(userId: string): Promise<string[]> {
   return rows.map((r) => r.country!).filter(Boolean);
 }
 
+export async function countSpeciesToEnrich(): Promise<number> {
+  return db.species.count({ where: { enrichedAt: null } });
+}
+
 // ---------------------------------------------------------------------------
 // Mutations
 // ---------------------------------------------------------------------------
@@ -279,7 +291,9 @@ export async function updateSpecies(id: string, input: SpeciesInput): Promise<Sp
     await assertScientificNameFree(input.scientificName, tx, id);
     const slug =
       existing.commonName === input.commonName ? existing.slug : await uniqueSlug(input.commonName, tx, id);
-    const s = await tx.species.update({ where: { id }, data: { ...input, slug } });
+    // Eigenes Bild gesetzt → alter Bildnachweis passt nicht mehr
+    const attribution = existing.imageUrl !== input.imageUrl ? { imageAttribution: null } : {};
+    const s = await tx.species.update({ where: { id }, data: { ...input, slug, ...attribution } });
     return toSummary(s);
   });
 }

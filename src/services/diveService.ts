@@ -188,6 +188,8 @@ export async function getDive(userId: string, id: string): Promise<DiveDetail | 
         id: s.species.id,
         slug: s.species.slug,
         commonName: s.species.commonName,
+        commonNameDe: s.species.commonNameDe,
+        imageAttribution: s.species.imageAttribution,
         scientificName: s.species.scientificName,
         category: s.species.category,
         imageUrl: s.species.imageUrl,

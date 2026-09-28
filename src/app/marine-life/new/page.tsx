@@ -13,6 +13,7 @@ export default async function NewSpeciesPage({ searchParams }: PageProps<"/marin
         cancelHref="/marine-life"
         initial={{
           commonName: typeof name === "string" ? name : "",
+          commonNameDe: "",
           scientificName: "",
           category: "Fish",
           description: "",

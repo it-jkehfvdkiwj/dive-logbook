@@ -15,6 +15,7 @@ import { listDives, listFavoriteDives } from "@/services/diveService";
 import { listRecentlySeen } from "@/services/speciesService";
 import { getOverviewStats } from "@/services/statsService";
 import { requirePageUser } from "@/lib/current-user";
+import { SpeciesName } from "@/components/species/species-lang";
 
 export const dynamic = "force-dynamic";
 
@@ -110,7 +111,9 @@ export default async function DashboardPage() {
               >
                 <SpeciesAvatar category={s.category} imageUrl={s.imageUrl} size="sm" />
                 <div className="min-w-0">
-                  <div className="line-clamp-2 text-[14px] font-semibold leading-tight">{s.commonName}</div>
+                  <div className="line-clamp-2 text-[14px] font-semibold leading-tight">
+                    <SpeciesName species={s} />
+                  </div>
                   <div className="truncate text-xs text-muted-foreground">{formatDateShort(s.lastSeen.date)}</div>
                 </div>
               </Link>

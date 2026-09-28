@@ -90,6 +90,13 @@ Kosten: Vercel Hobby und Neon Free sind für eine persönliche App kostenlos.
 - Eigenes Passwort ändern: **Settings → Account**. Passwörter müssen eindeutig sein.
 - `SSI_EMAIL`/`SSI_PASSWORD` und der nächtliche Cron gelten nur für den Admin. Andere Benutzer geben ihre SSI-Daten beim Sync ein.
 
+## 3c. Tierfotos & deutsche Namen
+
+- Fotos und deutsche Namen kommen von [iNaturalist](https://www.inaturalist.org). Die Fotos sind frei lizenziert, der Bildnachweis steht auf der Artseite.
+- Beim Deployment werden fehlende Fotos und Namen automatisch geholt (mit Zeitlimit). Den Rest holt **Settings → Marine Life → Fetch photos & German names**.
+- Neu angelegte Arten bekommen Foto und Namen sofort. Einzelne Arten: **Art → Edit → Fetch photo & German name**.
+- **Settings → Marine Life → Animal names**: Deutsch oder Englisch als Hauptname (pro Benutzer), der andere Name steht darunter. Die Suche findet beide.
+
 ## 3a. SSI-Logbuch synchronisieren
 
 Die App lädt deine Tauchgänge direkt aus deinem SSI-Konto (MySSI). Genutzt wird dieselbe Schnittstelle wie von der MySSI-App, nach dem Vorbild von [divessi-export](https://github.com/gerardpuig/divessi-export).

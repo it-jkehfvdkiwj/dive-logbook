@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,6 +17,7 @@ import { SpeciesAvatar } from "./species-avatar";
 
 export interface SpeciesFormValues {
   commonName: string;
+  commonNameDe: string;
   scientificName: string;
   category: string;
   description: string;
@@ -89,9 +90,14 @@ export function SpeciesForm({ mode, speciesId, initial, cancelHref }: SpeciesFor
         </div>
       </div>
 
+      {mode === "edit" && speciesId && <FetchFromInat speciesId={speciesId} />}
+
       <FormSection title="Species">
         <Field id="commonName" label="Common name" error={errors.commonName} className="sm:col-span-2">
           <Input autoCapitalize="words" placeholder="e.g. Scalloped Hammerhead" {...bind("commonName")} />
+        </Field>
+        <Field id="commonNameDe" label="German name" error={errors.commonNameDe} className="sm:col-span-2">
+          <Input autoCapitalize="words" placeholder="z. B. Bogenstirn-Hammerhai" {...bind("commonNameDe")} />
         </Field>
         <Field id="scientificName" label="Scientific name" error={errors.scientificName} hint="Must be unique.">
           <Input autoCapitalize="off" autoCorrect="off" className="italic" placeholder="e.g. Sphyrna lewini" {...bind("scientificName")} />
@@ -128,5 +134,39 @@ export function SpeciesForm({ mode, speciesId, initial, cancelHref }: SpeciesFor
         </Button>
       </div>
     </form>
+  );
+}
+
+/** Foto + deutschen Namen von iNaturalist neu laden (überschreibt beides). */
+function FetchFromInat({ speciesId }: { speciesId: string }) {
+  const router = useRouter();
+  const [state, setState] = useState<"idle" | "loading" | "done" | "none" | "error">("idle");
+  return (
+    <div className="flex flex-wrap items-center gap-3 px-1">
+      <Button
+        variant="secondary"
+        size="sm"
+        disabled={state === "loading"}
+        onClick={async () => {
+          setState("loading");
+          try {
+            const res = await api.post<{ found: boolean }>(`/api/species/${speciesId}/enrich`);
+            setState(res.found ? "done" : "none");
+            router.refresh();
+            if (res.found) router.replace(`/marine-life/${speciesId}`);
+          } catch {
+            setState("error");
+          }
+        }}
+      >
+        {state === "loading" ? <Loader2 className="animate-spin" /> : <Sparkles />}
+        Fetch photo &amp; German name
+      </Button>
+      <span className="text-[13px] text-muted-foreground">
+        {state === "none" && "Nothing found on iNaturalist – check the scientific name."}
+        {state === "error" && "iNaturalist not reachable, try again later."}
+        {state === "idle" && "From iNaturalist (uses the scientific name)."}
+      </span>
+    </div>
   );
 }

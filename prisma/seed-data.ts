@@ -208,3 +208,42 @@ export const DEMO_DIVES: SeedDive[] = [
     ],
   },
 ];
+
+/**
+ * Deutsche Namen als Fallback, falls iNaturalist keinen liefert (oder nicht erreichbar ist).
+ * Schlüssel: wissenschaftlicher Name.
+ */
+export const GERMAN_NAMES: Record<string, string> = {
+  "Carcharias taurus": "Sandtigerhai",
+  "Carcharhinus leucas": "Bullenhai",
+  "Sphyrna lewini": "Bogenstirn-Hammerhai",
+  "Sphyrna mokarran": "Großer Hammerhai",
+  "Sphyrna zygaena": "Glatter Hammerhai",
+  "Galeocerdo cuvier": "Tigerhai",
+  "Rhincodon typus": "Walhai",
+  "Carcharhinus limbatus": "Schwarzspitzenhai",
+  "Carcharhinus obscurus": "Schwarzhai",
+  "Carcharhinus brevipinna": "Spinnerhai",
+  "Stegostoma tigrinum": "Zebrahai",
+  "Triaenodon obesus": "Weißspitzen-Riffhai",
+  "Mobula alfredi": "Riffmanta",
+  "Mobula birostris": "Riesenmanta",
+  "Taeniura lymma": "Blaupunktrochen",
+  "Chelonia mydas": "Suppenschildkröte",
+  "Eretmochelys imbricata": "Echte Karettschildkröte",
+  "Caretta caretta": "Unechte Karettschildkröte",
+  "Gymnothorax javanicus": "Riesenmuräne",
+  "Amphiprion clarkii": "Clarks Anemonenfisch",
+  "Pterois miles": "Indischer Rotfeuerfisch",
+  "Zanclus cornutus": "Halfterfisch",
+  "Balistoides viridescens": "Riesen-Drückerfisch",
+  "Megaptera novaeangliae": "Buckelwal",
+  "Tursiops aduncus": "Indopazifischer Großer Tümmler",
+  "Stenella longirostris": "Spinnerdelfin",
+  "Dugong dugon": "Dugong",
+  "Octopus vulgaris": "Gemeiner Krake",
+  "Hymenocera picta": "Harlekingarnele",
+  "Hexabranchus sanguineus": "Spanische Tänzerin",
+  "Aurelia aurita": "Ohrenqualle",
+  "Acanthaster planci": "Dornenkronenseestern",
+};

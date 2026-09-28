@@ -15,7 +15,8 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { getDirectDatabaseUrl } from "../src/lib/database-url.mjs";
 import { slugify } from "../src/lib/utils";
-import { DEMO_DIVES, SPECIES_CATALOG } from "./seed-data";
+import { lookupInatTaxon, sleep } from "../src/lib/inaturalist";
+import { DEMO_DIVES, GERMAN_NAMES, SPECIES_CATALOG } from "./seed-data";
 
 const db = new PrismaClient({
   adapter: new PrismaPg({ connectionString: getDirectDatabaseUrl()! }),
@@ -109,10 +110,57 @@ async function seedOwner(): Promise<boolean> {
   return true;
 }
 
+/**
+ * Fotos + deutsche Namen aus iNaturalist für noch nicht angereicherte Arten (nur fehlende Felder).
+ * Läuft beim Deployment mit Zeitlimit; Rest lässt sich in der App nachholen (Settings → Marine Life).
+ * Bricht ab, wenn iNaturalist nicht erreichbar ist.
+ */
+async function enrichCatalog(budgetMs = 90_000) {
+  if (process.env.SKIP_ENRICH === "1") return;
+  const deadline = Date.now() + budgetMs;
+  const todo = await db.species.findMany({ where: { enrichedAt: null }, orderBy: { createdAt: "asc" } });
+  let updated = 0;
+  let networkErrors = 0;
+  for (const s of todo) {
+    if (Date.now() > deadline || networkErrors >= 3) break;
+    try {
+      const info = await lookupInatTaxon(s.scientificName, s.commonName);
+      await db.species.update({
+        where: { id: s.id },
+        data: {
+          enrichedAt: new Date(),
+          inatTaxonId: info?.taxonId ?? null,
+          ...(info?.photoUrl && !s.imageUrl ? { imageUrl: info.photoUrl, imageAttribution: info.attribution } : {}),
+          ...(info?.nameDe && !s.commonNameDe ? { commonNameDe: info.nameDe } : {}),
+        },
+      });
+      if (info) updated++;
+      networkErrors = 0;
+    } catch {
+      networkErrors++;
+    }
+    await sleep(1100);
+  }
+  if (networkErrors >= 3) console.log("iNaturalist not reachable – skipping photo/name enrichment for now.");
+  console.log(`Enrichment: ${updated} species updated from iNaturalist`);
+
+  // Fallback: kuratierte deutsche Namen für alles, was noch keinen hat
+  let fallback = 0;
+  for (const [scientificName, nameDe] of Object.entries(GERMAN_NAMES)) {
+    const r = await db.species.updateMany({
+      where: { scientificName: { equals: scientificName, mode: "insensitive" }, commonNameDe: null },
+      data: { commonNameDe: nameDe },
+    });
+    fallback += r.count;
+  }
+  if (fallback) console.log(`German fallback names: ${fallback}`);
+}
+
 async function main() {
   const withDemo = !process.argv.includes("--no-demo") && process.env.SEED_DEMO !== "false";
   const firstRun = await seedOwner();
   await seedCatalog();
+  await enrichCatalog();
   if (withDemo) await seedDemoDives(firstRun || process.argv.includes("--force-demo"), OWNER_ID);
 }
 

@@ -15,6 +15,8 @@ import { listUsers } from "@/services/userService";
 import { requirePageUser } from "@/lib/current-user";
 import { PasswordForm } from "@/components/settings/password-form";
 import { UsersPanel } from "@/components/settings/users-panel";
+import { SpeciesSettings } from "@/components/settings/species-settings";
+import { countSpeciesToEnrich } from "@/services/speciesService";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Settings" };
@@ -23,10 +25,11 @@ const dateTime = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeSty
 
 export default async function SettingsPage() {
   const user = await requirePageUser();
-  const [demoDives, runs, users] = await Promise.all([
+  const [demoDives, runs, users, toEnrich] = await Promise.all([
     countDemoDives(user.id),
     listImportRuns(user.id, 8),
     user.isAdmin ? listUsers() : Promise.resolve([]),
+    countSpeciesToEnrich(),
   ]);
   const ssi = user.isAdmin ? ssiCredentialsFromEnv() : null;
   const maskedEmail = ssi ? ssi.email.replace(/^(.)(.*)(@.*)$/, (_m, a: string, b: string, c: string) => a + "•".repeat(Math.min(b.length, 6)) + c) : null;
@@ -37,6 +40,10 @@ export default async function SettingsPage() {
       <div className="flex max-w-2xl flex-col gap-6">
         <Section title="Appearance">
           <ThemeSelector />
+        </Section>
+
+        <Section title="Marine Life">
+          <SpeciesSettings lang={user.speciesNameLang} missing={toEnrich} />
         </Section>
 
         <Section title="Profile & Sync">

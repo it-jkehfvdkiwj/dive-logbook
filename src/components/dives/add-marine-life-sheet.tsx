@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { api, ApiClientError, errorMessage } from "@/lib/api-client";
 import type { SpeciesSummary } from "@/types";
+import { SpeciesName, SpeciesSubtitle } from "@/components/species/species-lang";
 
 type SearchResult = SpeciesSummary & { sightingCount: number };
 type Step = { name: "search" } | { name: "details"; species: SpeciesSummary } | { name: "create" };
@@ -45,7 +46,7 @@ export function AddMarineLifeSheet({ diveId, open, onOpenChange, existingSpecies
   const [saving, setSaving] = useState(false);
 
   // Neue Art
-  const [newSpecies, setNewSpecies] = useState({ commonName: "", scientificName: "", category: "Fish" });
+  const [newSpecies, setNewSpecies] = useState({ commonName: "", commonNameDe: "", scientificName: "", category: "Fish" });
   const [createErrors, setCreateErrors] = useState<Record<string, string[] | undefined>>({});
 
   const requestId = useRef(0);
@@ -110,6 +111,7 @@ export function AddMarineLifeSheet({ diveId, open, onOpenChange, existingSpecies
     try {
       const created = await api.post<SpeciesSummary>("/api/species", {
         commonName: newSpecies.commonName,
+        commonNameDe: newSpecies.commonNameDe || null,
         scientificName: newSpecies.scientificName || null,
         category: newSpecies.category,
       });
@@ -151,7 +153,7 @@ export function AddMarineLifeSheet({ diveId, open, onOpenChange, existingSpecies
                   enterKeyHint="search"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search species, e.g. hammer"
+                  placeholder="Search, e.g. hammer / Hammerhai"
                   aria-label="Search species"
                   className="h-12 w-full rounded-xl bg-secondary pl-10 pr-10 text-base outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
                 />
@@ -174,9 +176,12 @@ export function AddMarineLifeSheet({ diveId, open, onOpenChange, existingSpecies
                       >
                         <SpeciesAvatar category={s.category} imageUrl={s.imageUrl} size="sm" />
                         <div className="min-w-0 flex-1">
-                          <div className="truncate text-[15px] font-semibold">{s.commonName}</div>
+                          <div className="truncate text-[15px] font-semibold">
+                            <SpeciesName species={s} />
+                          </div>
                           <div className="truncate text-[13px] text-muted-foreground">
-                            {s.scientificName ? <i>{s.scientificName}</i> : s.category}
+                            <SpeciesSubtitle species={s} className="inline" />
+                            {!s.scientificName && s.category}
                             {s.sightingCount > 0 && ` · seen ${s.sightingCount}×`}
                           </div>
                         </div>
@@ -201,7 +206,7 @@ export function AddMarineLifeSheet({ diveId, open, onOpenChange, existingSpecies
                     variant="outline"
                     className="w-full"
                     onClick={() => {
-                      setNewSpecies({ commonName: query.trim(), scientificName: "", category: "Fish" });
+                      setNewSpecies({ commonName: query.trim(), commonNameDe: "", scientificName: "", category: "Fish" });
                       setError(null);
                       setStep({ name: "create" });
                     }}
@@ -227,10 +232,10 @@ export function AddMarineLifeSheet({ diveId, open, onOpenChange, existingSpecies
               <div className="flex items-center gap-3">
                 <SpeciesAvatar category={step.species.category} imageUrl={step.species.imageUrl} size="lg" />
                 <div className="min-w-0">
-                  <DialogTitle className="truncate">{step.species.commonName}</DialogTitle>
-                  {step.species.scientificName && (
-                    <p className="truncate text-sm italic text-muted-foreground">{step.species.scientificName}</p>
-                  )}
+                  <DialogTitle className="truncate">
+                    <SpeciesName species={step.species} />
+                  </DialogTitle>
+                  <SpeciesSubtitle species={step.species} className="truncate text-sm" />
                 </div>
               </div>
             </DialogHeader>
@@ -302,6 +307,14 @@ export function AddMarineLifeSheet({ diveId, open, onOpenChange, existingSpecies
                   autoCapitalize="words"
                   value={newSpecies.commonName}
                   onChange={(e) => setNewSpecies((s) => ({ ...s, commonName: e.target.value }))}
+                />
+              </Field>
+              <Field id="ns-common-de" label="German name (optional)" error={createErrors.commonNameDe}>
+                <Input
+                  id="ns-common-de"
+                  autoCapitalize="words"
+                  value={newSpecies.commonNameDe}
+                  onChange={(e) => setNewSpecies((s) => ({ ...s, commonNameDe: e.target.value }))}
                 />
               </Field>
               <Field id="ns-scientific" label="Scientific name (optional)" error={createErrors.scientificName}>

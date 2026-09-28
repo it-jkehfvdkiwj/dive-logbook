@@ -19,6 +19,7 @@ export default async function EditSpeciesPage({ params }: PageProps<"/marine-lif
         cancelHref={`/marine-life/${s.id}`}
         initial={{
           commonName: s.commonName,
+          commonNameDe: s.commonNameDe ?? "",
           scientificName: s.scientificName ?? "",
           category: s.category,
           description: s.description ?? "",

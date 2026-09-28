@@ -4,18 +4,21 @@ import { notFound } from "next/navigation";
 import { ChevronLeft, ChevronRight, Pencil, Star } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { SpeciesAvatar } from "@/components/species/species-avatar";
+import { SpeciesPhoto } from "@/components/species/species-photo";
 import { DeleteSpeciesButton } from "@/components/species/delete-species-button";
 import { getCategory } from "@/lib/categories";
 import { formatDateShort } from "@/lib/format";
 import { getSpecies } from "@/services/speciesService";
 import { requirePageUser } from "@/lib/current-user";
+import { SpeciesName, SpeciesSubtitle } from "@/components/species/species-lang";
 
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: PageProps<"/marine-life/[id]">): Promise<Metadata> {
   const user = await requirePageUser();
   const s = await getSpecies(user.id, (await params).id);
-  return { title: s?.commonName ?? "Species" };
+  if (!s) return { title: "Species" };
+  return { title: user.speciesNameLang === "de" && s.commonNameDe ? s.commonNameDe : s.commonName };
 }
 
 export default async function SpeciesDetailPage({ params }: PageProps<"/marine-life/[id]">) {
@@ -41,19 +44,20 @@ export default async function SpeciesDetailPage({ params }: PageProps<"/marine-l
         </Link>
       </div>
 
+      {species.imageUrl && (
+        <SpeciesPhoto url={species.imageUrl} alt={species.commonName} attribution={species.imageAttribution} />
+      )}
+
       <header className="flex flex-col items-center py-4 text-center">
-        <SpeciesAvatar category={species.category} imageUrl={species.imageUrl} size="xl" />
-        <h1 className="mt-4 text-[28px] font-bold leading-tight tracking-tight">{species.commonName}</h1>
-        {species.scientificName && <p className="mt-0.5 text-[16px] italic text-muted-foreground">{species.scientificName}</p>}
+        {!species.imageUrl && <SpeciesAvatar category={species.category} imageUrl={null} size="xl" />}
+        <h1 className="mt-2 text-[28px] font-bold leading-tight tracking-tight">
+          <SpeciesName species={species} />
+        </h1>
+        <SpeciesSubtitle species={species} className="mt-0.5 text-[16px]" />
         <span className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1 text-sm font-medium">
           <span aria-hidden>{category.emoji}</span> {species.category}
         </span>
       </header>
-
-      {species.imageUrl && (
-        // eslint-disable-next-line @next/next/no-img-element -- externe Bild-URL
-        <img src={species.imageUrl} alt={species.commonName} className="mb-4 max-h-80 w-full rounded-3xl object-cover" />
-      )}
 
       {species.description && <p className="mx-auto mb-6 max-w-2xl text-center text-[15px] leading-relaxed text-muted-foreground">{species.description}</p>}
 
@@ -105,7 +109,7 @@ export default async function SpeciesDetailPage({ params }: PageProps<"/marine-l
       )}
 
       <div className="mt-10 flex justify-center">
-        <DeleteSpeciesButton speciesId={species.id} name={species.commonName} sightingCount={stats.sightings} />
+        <DeleteSpeciesButton speciesId={species.id} name={species.commonNameDe && user.speciesNameLang === "de" ? species.commonNameDe : species.commonName} sightingCount={stats.sightings} />
       </div>
     </div>
   );

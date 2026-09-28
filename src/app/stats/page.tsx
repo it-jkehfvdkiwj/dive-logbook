@@ -7,6 +7,7 @@ import { getCategory } from "@/lib/categories";
 import { formatTotalTime } from "@/lib/format";
 import { getOverviewStats } from "@/services/statsService";
 import { requirePageUser } from "@/lib/current-user";
+import { SpeciesName } from "@/components/species/species-lang";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Statistics" };
@@ -115,7 +116,9 @@ export default async function StatsPage() {
                   <Link href={`/marine-life/${t.id}`} className="flex items-center gap-3 px-4 py-3 active:bg-accent">
                     <span className="w-5 text-[15px] font-bold tabular-nums text-muted-foreground">{i + 1}</span>
                     <span aria-hidden className="text-xl">{getCategory(t.category).emoji}</span>
-                    <span className="flex-1 truncate text-[15px] font-medium">{t.commonName}</span>
+                    <span className="flex-1 truncate text-[15px] font-medium">
+                      <SpeciesName species={t} />
+                    </span>
                     <span className="text-[15px] font-semibold tabular-nums">{t.count}×</span>
                   </Link>
                 </li>

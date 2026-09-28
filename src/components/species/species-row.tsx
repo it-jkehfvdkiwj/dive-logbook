@@ -3,6 +3,7 @@ import { ChevronRight } from "lucide-react";
 import { formatDateShort } from "@/lib/format";
 import type { SpeciesListItem } from "@/types";
 import { SpeciesAvatar } from "./species-avatar";
+import { SpeciesName, SpeciesSubtitle } from "@/components/species/species-lang";
 
 /** Eintrag der Life List. */
 export function SpeciesRow({ species }: { species: SpeciesListItem }) {
@@ -14,10 +15,10 @@ export function SpeciesRow({ species }: { species: SpeciesListItem }) {
     >
       <SpeciesAvatar category={species.category} imageUrl={species.imageUrl} />
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[16px] font-semibold">{species.commonName}</div>
-        {species.scientificName && (
-          <div className="truncate text-[13px] italic text-muted-foreground">{species.scientificName}</div>
-        )}
+        <div className="truncate text-[16px] font-semibold">
+          <SpeciesName species={species} />
+        </div>
+        <SpeciesSubtitle species={species} className="truncate text-[13px]" />
         <div className="mt-0.5 truncate text-[13px] text-muted-foreground">
           {seen && species.lastSeen
             ? `Last seen ${formatDateShort(species.lastSeen.date)} · ${species.lastSeen.siteName}`

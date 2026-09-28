@@ -24,6 +24,8 @@ model User {
   isAdmin                  Boolean  @default(false)
   /// Wenn true, überschreibt ein Sync auch manuell geänderte Felder.
   syncOverwriteManualEdits Boolean  @default(false)
+  /// Sprache der Tiernamen: "en" | "de" (der jeweils andere Name wird zusätzlich angezeigt)
+  speciesNameLang          String   @default("en")
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
 
@@ -111,12 +113,20 @@ model Dive {
 model Species {
   id             String   @id @default(cuid())
   commonName     String
+  /// Deutscher Name (optional, z. B. aus iNaturalist)
+  commonNameDe   String?
   /// Eindeutig (case-insensitiv im Service geprüft). Optional, falls unbekannt.
   scientificName String?  @unique
   /// Frei erweiterbar – bekannte Werte in src/lib/categories.ts
   category       String   @default("Other")
   description    String?
   imageUrl       String?
+  /// Bildnachweis/Lizenz, z. B. "(c) Name, some rights reserved (CC BY-NC)"
+  imageAttribution String?
+  /// iNaturalist-Taxon (für Foto/Namen); null = noch nicht nachgeschlagen
+  inatTaxonId    Int?
+  /// Zeitpunkt der letzten automatischen Anreicherung (Foto/deutscher Name)
+  enrichedAt     DateTime?
   slug           String   @unique
   /// "manual" | "catalog" | später z. B. "worms", "inaturalist", "ssi"
   source         String   @default("manual")
@@ -129,6 +139,7 @@ model Species {
 
   @@unique([source, externalId])
   @@index([commonName])
+  @@index([commonNameDe])
   @@index([category])
 }
 

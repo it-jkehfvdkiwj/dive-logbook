@@ -56,6 +56,26 @@ function toSyncData(d: ImportedDive) {
 const same = (a: unknown, b: unknown) =>
   a instanceof Date && b instanceof Date ? a.getTime() === b.getTime() : a === b;
 
+/** Kategorie aus dem Namen raten (für neu importierte Arten). */
+function guessCategory(name: string): string {
+  const n = name.toLowerCase();
+  const rules: [RegExp, string][] = [
+    [/shark|hai\b|haie/, "Shark"],
+    [/\bray\b|manta|stingray|rochen|guitarfish|skate/, "Ray"],
+    [/turtle|schildkr/, "Turtle"],
+    [/dolphin|delfin/, "Dolphin"],
+    [/whale|\bwal\b/, "Whale"],
+    [/dugong|seal|sea lion|robbe|seekuh/, "Mammal"],
+    [/octopus|squid|cuttlefish|krake|tintenfisch|sepia/, "Cephalopod"],
+    [/shrimp|crab|lobster|garnele|krabbe|languste|hummer/, "Crustacean"],
+    [/nudibranch|nacktschnecke|sea slug|spanish dancer|flatworm/, "Nudibranch"],
+    [/jelly|qualle/, "Jellyfish"],
+    [/coral|koralle|anemone/, "Coral"],
+    [/star|urchin|cucumber|seestern|seeigel|seegurke/, "Echinoderm"],
+  ];
+  return rules.find(([re]) => re.test(n))?.[1] ?? "Fish";
+}
+
 /** Findet eine Art über externe ID → wissenschaftlichen Namen → Common Name, sonst neu anlegen. */
 async function resolveSpecies(tx: Tx, source: string, s: ImportedSighting): Promise<string> {
   if (s.speciesExternalId) {
@@ -82,7 +102,7 @@ async function resolveSpecies(tx: Tx, source: string, s: ImportedSighting): Prom
     data: {
       commonName: s.commonName,
       scientificName: s.scientificName ?? null,
-      category: s.category ?? "Other",
+      category: s.category ?? guessCategory(s.commonName),
       slug: await uniqueSlug(s.commonName, tx),
       source,
       externalId: s.speciesExternalId ?? null,

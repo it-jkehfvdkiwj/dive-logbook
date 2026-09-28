@@ -3,6 +3,7 @@ import { optionalText } from "./common";
 
 export const speciesInputSchema = z.object({
   commonName: z.string().trim().min(1, "Common name is required").max(120),
+  commonNameDe: optionalText(120),
   scientificName: optionalText(160),
   // Freier String → Kategorien bleiben erweiterbar; unbekannte Werte werden als "Other" angezeigt.
   category: z.string().trim().min(1, "Category is required").max(40).default("Other"),

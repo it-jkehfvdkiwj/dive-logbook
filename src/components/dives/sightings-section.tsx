@@ -20,6 +20,7 @@ import {
 import { api, errorMessage } from "@/lib/api-client";
 import type { SightingWithSpecies } from "@/types";
 import { AddMarineLifeSheet } from "./add-marine-life-sheet";
+import { SpeciesName, SpeciesSubtitle } from "@/components/species/species-lang";
 
 export function SightingsSection({ diveId, sightings }: { diveId: string; sightings: SightingWithSpecies[] }) {
   const [adding, setAdding] = useState(false);
@@ -58,7 +59,9 @@ export function SightingsSection({ diveId, sightings }: { diveId: string; sighti
                 <SpeciesAvatar category={s.species.category} imageUrl={s.species.imageUrl} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="truncate text-[16px] font-semibold">{s.species.commonName}</span>
+                    <span className="truncate text-[16px] font-semibold">
+                      <SpeciesName species={s.species} />
+                    </span>
                     {s.count != null && (
                       <span className="shrink-0 rounded-full bg-secondary px-2 py-0.5 text-xs font-semibold tabular-nums">
                         ×{s.count}
@@ -68,9 +71,7 @@ export function SightingsSection({ diveId, sightings }: { diveId: string; sighti
                   {s.notes ? (
                     <p className="line-clamp-2 text-[13px] text-muted-foreground">“{s.notes}”</p>
                   ) : (
-                    s.species.scientificName && (
-                      <p className="truncate text-[13px] italic text-muted-foreground">{s.species.scientificName}</p>
-                    )
+                    <SpeciesSubtitle species={s.species} className="truncate text-[13px]" />
                   )}
                 </div>
                 <ChevronRight className="size-4 shrink-0 text-muted-foreground/40" />
@@ -129,7 +130,9 @@ function EditSightingSheet({ sighting, onClose }: { sighting: SightingWithSpecie
         <DialogHeader>
           <div className="flex items-center gap-3">
             <SpeciesAvatar category={sighting.species.category} imageUrl={sighting.species.imageUrl} />
-            <DialogTitle className="truncate">{sighting.species.commonName}</DialogTitle>
+            <DialogTitle className="truncate">
+              <SpeciesName species={sighting.species} />
+            </DialogTitle>
           </div>
         </DialogHeader>
         <DialogBody className="flex flex-col gap-4">
