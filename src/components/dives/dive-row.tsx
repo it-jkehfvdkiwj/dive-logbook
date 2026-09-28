@@ -1,3 +1,4 @@
+import { countryLabel } from "@/lib/country-display";
 import Link from "next/link";
 import { ChevronRight, Star } from "lucide-react";
 import { formatDateShort, formatDepth, formatMinutes } from "@/lib/format";
@@ -24,7 +25,7 @@ export function DiveRow({ dive }: { dive: DiveListItem }) {
         </div>
         <div className="truncate text-[13px] text-muted-foreground">
           {formatDateShort(dive.date)}
-          {dive.site.location || dive.site.country ? ` · ${dive.site.location ?? dive.site.country}` : ""}
+          {dive.site.location || dive.site.country ? ` · ${dive.site.location ?? countryLabel(dive.site.country, dive.site.countryCode)}` : ""}
         </div>
         <div className="mt-0.5 flex items-center gap-2 text-[13px]">
           {metrics && <span className="font-medium tabular-nums">{metrics}</span>}

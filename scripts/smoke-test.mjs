@@ -39,7 +39,7 @@ const diveBody = (over = {}) => ({
   diveNumber: null,
   siteName: `Test Reef ${stamp}`,
   location: "Test Bay",
-  country: "Testland",
+  country: "Moçambique",
   latitude: -25.5,
   longitude: 32.9,
   maxDepth: 18.2,
@@ -101,8 +101,20 @@ async function main() {
   console.log("\nSearch & filters");
   const search = await call("GET", `/api/dives?q=${encodeURIComponent(`Test Wall ${stamp}`)}`);
   check("search by site", search.data.dives.length === 1 && search.data.dives[0].id === diveB);
-  const byCountry = await call("GET", "/api/dives?country=Testland&minDepth=20");
+  const byCountry = await call("GET", `/api/dives?country=Mozambique&minDepth=20&q=${stamp}`);
   check("filter country + min depth", byCountry.data.dives.length === 1 && byCountry.data.dives[0].id === diveA);
+
+  console.log("\nCountries & map");
+  const gotA = await call("GET", `/api/dives/${diveA}`);
+  check("country name normalized (Moçambique → Mozambique)", gotA.data.site.country === "Mozambique" && gotA.data.site.countryCode === "MZ", gotA.data.site);
+  const geo = await call("GET", "/api/geo/country?lat=16.6&lng=-22.9");
+  check("GPS → country (Cape Verde, offshore)", geo.data.countryCode === "CV", geo.data);
+  const moved = await call("PATCH", `/api/sites/${gotA.data.site.id}`, { latitude: 16.6, longitude: -22.9 });
+  check("move site → country follows GPS", moved.status === 200 && moved.data.countryCode === "CV", moved.data);
+  await call("PATCH", `/api/sites/${gotA.data.site.id}`, { latitude: -25.5, longitude: 32.9 });
+  check("invalid site location → 400", (await call("PATCH", `/api/sites/${gotA.data.site.id}`, { latitude: 99, longitude: 0 })).status === 400);
+  const mapPage = await fetch(BASE + "/map", { headers: { cookie } });
+  check("map page loads", mapPage.status === 200);
 
   console.log("\nSpecies");
   const sci = `Testus mantus${stamp}`;

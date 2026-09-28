@@ -7,6 +7,7 @@ export interface DiveSiteSummary {
   name: string;
   location: string | null;
   country: string | null;
+  countryCode: string | null;
   latitude: number | null;
   longitude: number | null;
 }
@@ -136,7 +137,7 @@ export interface OverviewStats {
   countries: number;
   diveSites: number;
   topSpecies: { id: string; commonName: string; commonNameDe: string | null; category: string; count: number }[];
-  divesByCountry: { country: string; count: number }[];
+  divesByCountry: { country: string; countryCode: string | null; count: number }[];
 }
 
 export interface ApiErrorBody {

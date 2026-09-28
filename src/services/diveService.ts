@@ -28,6 +28,7 @@ function toListItem(d: DiveWithListInclude): DiveListItem {
       name: d.diveSite.name,
       location: d.diveSite.location,
       country: d.diveSite.country,
+      countryCode: d.diveSite.countryCode,
       latitude: d.diveSite.latitude,
       longitude: d.diveSite.longitude,
     },

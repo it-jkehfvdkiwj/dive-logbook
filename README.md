@@ -97,6 +97,13 @@ Kosten: Vercel Hobby und Neon Free sind für eine persönliche App kostenlos.
 - Neu angelegte Arten bekommen Foto und Namen sofort. Einzelne Arten: **Art → Edit → Fetch photo & German name**.
 - **Settings → Marine Life → Animal names**: Deutsch oder Englisch als Hauptname (pro Benutzer), der andere Name steht darunter. Die Suche findet beide.
 
+## 3d. Karte, GPS & Länder
+
+- **Tab „Map“**: alle Tauchplätze als Pins (Zahl = Anzahl Dives), gruppiert beim Herauszoomen. Länder-Chips oben springen zum Land; Umschalter für Karte/Satellit. Tippen auf einen Pin zeigt Platz, Statistik und alle Dives dort.
+- **Länder werden vereinheitlicht**: Das Land wird aus den GPS-Koordinaten bestimmt (offline, inkl. Küstengewässer, Paket `@rapideditor/country-coder`). Ohne GPS wird der Name in vielen Sprachen erkannt („Cap-Vert“, „cabo verde“, „Mosambik“ → einheitlicher englischer Name + Flagge). Das läuft bei jedem Deployment und bei jedem Sync.
+- **Plätze ohne GPS** / falsche Position: Map → Chip „… without GPS“ bzw. Pin → **Edit location**. Karte unter die Nadel schieben, „Mein Standort“ oder Koordinaten einfügen. Gilt für alle Dives an diesem Platz; der SSI-Sync überschreibt die Korrektur nicht.
+- Kartendaten: [OpenFreeMap](https://openfreemap.org) / © OpenMapTiles / © OpenStreetMap, Satellit: Esri World Imagery. Kein API-Key nötig.
+
 ## 3a. SSI-Logbuch synchronisieren
 
 Die App lädt deine Tauchgänge direkt aus deinem SSI-Konto (MySSI). Genutzt wird dieselbe Schnittstelle wie von der MySSI-App, nach dem Vorbild von [divessi-export](https://github.com/gerardpuig/divessi-export).

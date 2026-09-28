@@ -64,6 +64,29 @@ interface SiteInfo {
   longitude: number | null;
 }
 
+/**
+ * Land eines SSI-Tauchplatzes. Die Feldnamen variieren ("odin_countries_name",
+ * "country", verschachtelte Objekte …) – englische Varianten werden bevorzugt.
+ * Die Vereinheitlichung (GPS/Aliase) passiert später in resolveSite().
+ */
+function siteCountry(s: Raw): string | null {
+  const entries = Object.entries(s).filter(([k]) => /countr(y|ies)/i.test(k) && !/_id$/i.test(k));
+  const valueText = (v: unknown): string | null => {
+    if (isRecord(v)) return nameOf(v, [/(^|_)(name_?)?en$/i, /name$/i]) ?? null;
+    return text(v);
+  };
+  const ordered = [
+    ...entries.filter(([k]) => /(_en|name_?en|english)$/i.test(k)),
+    ...entries.filter(([k]) => /countr(y|ies)(_name)?$/i.test(k)),
+    ...entries,
+  ];
+  for (const [, v] of ordered) {
+    const t = valueText(v);
+    if (t) return t;
+  }
+  return null;
+}
+
 function mapSites(rawSites: unknown): Map<string, SiteInfo> {
   const map = new Map<string, SiteInfo>();
   if (!Array.isArray(rawSites)) return map;
@@ -77,7 +100,7 @@ function mapSites(rawSites: unknown): Map<string, SiteInfo> {
     const validCoords = lat != null && lng != null && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && !(lat === 0 && lng === 0);
     map.set(String(id), {
       name,
-      country: text(pick(s, [], /country(_name)?$/, /_id$/)),
+      country: siteCountry(s),
       location: text(pick(s, [], /(city|region|location|place|area)(_name)?$/, /_id$/)),
       latitude: validCoords ? lat : null,
       longitude: validCoords ? lng : null,
@@ -274,6 +297,12 @@ export function mapSsiLogbook(raw: Raw, animalCatalog: Raw[] | null = null): Ssi
   ]) {
     diagnostics.push(`sample ${key}: ${sample(details, key)}`);
   }
+  const rawSiteList = Array.isArray(raw.logbook_sites) ? raw.logbook_sites.filter(isRecord) : [];
+  const countryKeys = [...new Set(rawSiteList.flatMap((x) => Object.keys(x).filter((k) => /countr/i.test(k))))];
+  diagnostics.push(
+    `site country fields: ${countryKeys.map((k) => `${k}=${JSON.stringify(rawSiteList.find((x) => x[k] != null)?.[k] ?? null)?.slice(0, 40)}`).join("; ") || "(none)"}`,
+  );
+  diagnostics.push(`sites with GPS: ${[...sites.values()].filter((x) => x.latitude != null).length}/${sites.size}`);
   const wildlifeByLog = groupByLog(raw, WILDLIFE_KEY, diagnostics, "wildlife");
   const buddiesByLog = groupByLog(raw, BUDDY_KEY, diagnostics, "buddy");
 

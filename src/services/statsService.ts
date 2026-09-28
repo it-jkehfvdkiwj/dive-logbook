@@ -25,7 +25,7 @@ export async function getOverviewStats(userId: string): Promise<OverviewStats> {
       db.sighting.count({ where: { dive: { userId } } }),
       db.diveSite.findMany({
         where: { userId, dives: { some: {} } },
-        select: { id: true, country: true, _count: { select: { dives: true } } },
+        select: { id: true, country: true, countryCode: true, _count: { select: { dives: true } } },
       }),
       db.sighting.groupBy({
         by: ["speciesId"],
@@ -46,10 +46,14 @@ export async function getOverviewStats(userId: string): Promise<OverviewStats> {
   });
   const byId = new Map(topSpeciesRows.map((s) => [s.id, s]));
 
-  const divesByCountryMap = new Map<string, number>();
+  const divesByCountryMap = new Map<string, { countryCode: string | null; count: number }>();
   for (const site of sites) {
     const key = site.country ?? "Unknown";
-    divesByCountryMap.set(key, (divesByCountryMap.get(key) ?? 0) + site._count.dives);
+    const prev = divesByCountryMap.get(key);
+    divesByCountryMap.set(key, {
+      countryCode: prev?.countryCode ?? site.countryCode ?? null,
+      count: (prev?.count ?? 0) + site._count.dives,
+    });
   }
 
   const speciesByCategory = speciesByCategoryRows
@@ -78,7 +82,7 @@ export async function getOverviewStats(userId: string): Promise<OverviewStats> {
       })
       .filter((x): x is NonNullable<typeof x> => x !== null),
     divesByCountry: [...divesByCountryMap.entries()]
-      .map(([country, count]) => ({ country, count }))
+      .map(([country, v]) => ({ country, countryCode: v.countryCode, count: v.count }))
       .sort((a, b) => b.count - a.count),
   };
 }

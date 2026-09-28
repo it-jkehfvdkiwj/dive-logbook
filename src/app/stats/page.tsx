@@ -1,3 +1,4 @@
+import { countryLabel } from "@/lib/country-display";
 import Link from "next/link";
 import { BarChart3 } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
@@ -44,8 +45,8 @@ export default async function StatsPage() {
       </Group>
 
       <Group title="Places">
-        <StatTile label="Countries" value={s.countries} />
-        <StatTile label="Dive sites" value={s.diveSites} />
+        <StatTile label="Countries" value={s.countries} href="/map" />
+        <StatTile label="Dive sites" value={s.diveSites} href="/map" />
       </Group>
 
       <Group title="Marine Life">
@@ -95,7 +96,7 @@ export default async function StatsPage() {
               <li key={c.country}>
                 <Link href={`/dives?country=${encodeURIComponent(c.country)}`} className="block">
                   <div className="mb-1 flex justify-between text-[14px]">
-                    <span>{c.country}</span>
+                    <span>{countryLabel(c.country, c.countryCode)}</span>
                     <span className="font-semibold tabular-nums">{c.count}</span>
                   </div>
                   <div className="h-2 overflow-hidden rounded-full bg-secondary">

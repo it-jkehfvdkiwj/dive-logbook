@@ -28,3 +28,11 @@ export const newUserSchema = z.object({
 });
 
 export const changePasswordSchema = z.object({ password: passwordSchema });
+
+export const siteLocationSchema = z
+  .object({
+    latitude: z.number().min(-90).max(90).nullable(),
+    longitude: z.number().min(-180).max(180).nullable(),
+    country: z.string().trim().max(80).nullable().optional(),
+  })
+  .refine((v) => (v.latitude == null) === (v.longitude == null), { message: "Provide both latitude and longitude" });

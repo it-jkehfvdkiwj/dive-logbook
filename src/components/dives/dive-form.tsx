@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, LocateFixed, Star, Trash2 } from "lucide-react";
+import { Loader2, LocateFixed, Map as MapIcon, Star, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -11,6 +11,7 @@ import { Field, FormSection } from "@/components/common/field";
 import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { api, ApiClientError, errorMessage } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
+import { LocationPicker, type PickedLocation } from "@/components/map/location-picker";
 import {
   CONDITIONS_OPTIONS,
   CURRENT_OPTIONS,
@@ -48,6 +49,33 @@ export function DiveForm({ mode, diveId, initial, suggestions }: DiveFormProps) 
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [locating, setLocating] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  const currentPoint = (() => {
+    const lat = Number(values.latitude.replace(",", "."));
+    const lng = Number(values.longitude.replace(",", "."));
+    return values.latitude.trim() && values.longitude.trim() && Number.isFinite(lat) && Number.isFinite(lng)
+      ? { latitude: lat, longitude: lng }
+      : null;
+  })();
+
+  function applyPicked(loc: PickedLocation) {
+    setValues((prev) => ({
+      ...prev,
+      latitude: loc.latitude.toFixed(5),
+      longitude: loc.longitude.toFixed(5),
+      country: prev.country.trim() ? prev.country : (loc.country ?? ""),
+    }));
+  }
+
+  async function fillCountry(latitude: number, longitude: number) {
+    try {
+      const res = await api.get<{ country: string | null }>(`/api/geo/country?lat=${latitude}&lng=${longitude}`);
+      if (res.country) setValues((prev) => (prev.country.trim() ? prev : { ...prev, country: res.country! }));
+    } catch {
+      /* Land bleibt leer */
+    }
+  }
 
   const set = (key: TextKey) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setValues((prev) => ({ ...prev, [key]: e.target.value }));
@@ -102,6 +130,7 @@ export function DiveForm({ mode, diveId, initial, suggestions }: DiveFormProps) 
           longitude: pos.coords.longitude.toFixed(5),
         }));
         setLocating(false);
+        void fillCountry(pos.coords.latitude, pos.coords.longitude);
       },
       () => {
         setFormError("Could not get your location. Check the location permission.");
@@ -151,12 +180,23 @@ export function DiveForm({ mode, diveId, initial, suggestions }: DiveFormProps) 
         <Field id="longitude" label="Longitude" error={err("longitude")}>
           <Input {...decimal} placeholder="30.5180" {...inputProps("longitude")} />
         </Field>
-        <div className="sm:col-span-2">
+        <div id="location" className="flex scroll-mt-24 flex-wrap gap-2 sm:col-span-2">
+          <Button variant="secondary" size="sm" onClick={() => setPickerOpen(true)}>
+            <MapIcon />
+            {currentPoint ? "Adjust on map" : "Pick on map"}
+          </Button>
           <Button variant="secondary" size="sm" onClick={useCurrentLocation} disabled={locating}>
             {locating ? <Loader2 className="animate-spin" /> : <LocateFixed />}
             Use current location
           </Button>
         </div>
+        <LocationPicker
+          open={pickerOpen}
+          onOpenChange={setPickerOpen}
+          title={values.siteName.trim() || "Dive site location"}
+          initial={currentPoint}
+          onSave={applyPicked}
+        />
       </FormSection>
 
       <FormSection title="Dive">

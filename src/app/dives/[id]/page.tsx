@@ -1,3 +1,4 @@
+import { countryLabel } from "@/lib/country-display";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -5,6 +6,7 @@ import { ChevronLeft, MapPin, Pencil, Quote } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { DepthCover } from "@/components/dives/depth-cover";
 import { FavoriteButton } from "@/components/dives/favorite-button";
+import { SiteMiniMap } from "@/components/map/site-mini-map";
 import { SightingsSection } from "@/components/dives/sightings-section";
 import { PhotosSection } from "@/components/dives/photos-section";
 import {
@@ -33,7 +35,7 @@ export default async function DiveDetailPage({ params }: PageProps<"/dives/[id]"
   const dive = await getDive(user.id, id);
   if (!dive) notFound();
 
-  const place = [dive.site.location, dive.site.country].filter(Boolean).join(", ");
+  const place = [dive.site.location, countryLabel(dive.site.country, dive.site.countryCode)].filter(Boolean).join(", ");
   const hasCoords = dive.site.latitude != null && dive.site.longitude != null;
 
   const keyStats = [
@@ -50,7 +52,7 @@ export default async function DiveDetailPage({ params }: PageProps<"/dives/[id]"
     { label: "Dive number", value: dive.diveNumber != null ? `#${dive.diveNumber}` : null },
     { label: "Dive site", value: dive.site.name },
     { label: "Location", value: dive.site.location },
-    { label: "Country", value: dive.site.country },
+    { label: "Country", value: countryLabel(dive.site.country, dive.site.countryCode) },
     { label: "Latitude", value: dive.site.latitude != null ? formatCoordinate(dive.site.latitude, "lat") : null },
     { label: "Longitude", value: dive.site.longitude != null ? formatCoordinate(dive.site.longitude, "lng") : null },
     { label: "Water conditions", value: dive.conditions },
@@ -132,18 +134,21 @@ export default async function DiveDetailPage({ params }: PageProps<"/dives/[id]"
             </dl>
           </section>
 
-          {hasCoords && (
-            <div className="flex items-center gap-3 rounded-2xl border border-dashed border-border p-4">
+          {hasCoords ? (
+            <SiteMiniMap siteId={dive.site.id} latitude={dive.site.latitude!} longitude={dive.site.longitude!} />
+          ) : (
+            <Link
+              href={`/map?site=${dive.site.id}&edit=1`}
+              className="flex items-center gap-3 rounded-2xl border border-dashed border-border p-4 active:bg-accent"
+            >
               <div className="flex size-10 items-center justify-center rounded-xl bg-accent text-accent-foreground">
                 <MapPin className="size-5" />
               </div>
               <div className="min-w-0">
-                <div className="text-[15px] font-semibold">Map coming soon</div>
-                <div className="truncate text-[13px] tabular-nums text-muted-foreground">
-                  {formatCoordinate(dive.site.latitude!, "lat")}, {formatCoordinate(dive.site.longitude!, "lng")}
-                </div>
+                <div className="text-[15px] font-semibold">No GPS position</div>
+                <div className="text-[13px] text-muted-foreground">Tap to set it on the map – applies to all dives here</div>
               </div>
-            </div>
+            </Link>
           )}
         </div>
       </div>

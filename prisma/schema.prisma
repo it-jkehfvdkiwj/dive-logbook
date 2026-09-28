@@ -43,8 +43,12 @@ model DiveSite {
   name       String
   location   String? // Region / Ort, z. B. "Shelly Beach"
   country    String?
+  /// ISO-3166 alpha-2, aus GPS oder normalisiertem Ländernamen
+  countryCode String?
   latitude   Float?
   longitude  Float?
+  /// true, wenn Position/Land in der App korrigiert wurde → Sync überschreibt sie nicht
+  locationEdited Boolean @default(false)
   source     String   @default("manual")
   externalId String?
   createdAt  DateTime @default(now())

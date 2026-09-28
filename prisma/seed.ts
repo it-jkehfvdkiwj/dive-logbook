@@ -16,6 +16,7 @@ import { PrismaClient } from "../src/generated/prisma/client";
 import { getDirectDatabaseUrl } from "../src/lib/database-url.mjs";
 import { slugify } from "../src/lib/utils";
 import { lookupInatTaxon, sleep } from "../src/lib/inaturalist";
+import { normalizeCountry } from "../src/lib/countries";
 import { DEMO_DIVES, GERMAN_NAMES, SPECIES_CATALOG } from "./seed-data";
 
 const db = new PrismaClient({
@@ -156,12 +157,29 @@ async function enrichCatalog(budgetMs = 90_000) {
   if (fallback) console.log(`German fallback names: ${fallback}`);
 }
 
+/** Länder aller Tauchplätze vereinheitlichen (GPS → Land, "Cap-Vert" → "Cape Verde"). */
+async function normalizeSiteCountries() {
+  const sites = await db.diveSite.findMany({
+    select: { id: true, country: true, countryCode: true, latitude: true, longitude: true, source: true, locationEdited: true },
+  });
+  let changed = 0;
+  for (const s of sites) {
+    const n = normalizeCountry(s, s.source !== "manual" || s.locationEdited);
+    if (n.country !== s.country || n.countryCode !== s.countryCode) {
+      await db.diveSite.update({ where: { id: s.id }, data: n });
+      changed++;
+    }
+  }
+  console.log(`Countries normalized: ${changed} of ${sites.length} sites updated`);
+}
+
 async function main() {
   const withDemo = !process.argv.includes("--no-demo") && process.env.SEED_DEMO !== "false";
   const firstRun = await seedOwner();
   await seedCatalog();
   await enrichCatalog();
   if (withDemo) await seedDemoDives(firstRun || process.argv.includes("--force-demo"), OWNER_ID);
+  await normalizeSiteCountries();
 }
 
 main()

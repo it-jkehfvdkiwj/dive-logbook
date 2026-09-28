@@ -1,4 +1,4 @@
-import { BarChart3, Fish, Home, Settings, Star, Waves, type LucideIcon } from "lucide-react";
+import { BarChart3, Fish, Home, Map as MapIcon, Settings, Star, Waves, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
   href: string;
@@ -12,7 +12,8 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Dashboard", icon: Home, mobile: true },
   { href: "/dives", label: "Dives", icon: Waves, mobile: true },
   { href: "/marine-life", label: "Marine Life", icon: Fish, mobile: true },
-  { href: "/favorites", label: "Favorites", icon: Star, mobile: true },
+  { href: "/map", label: "Map", icon: MapIcon, mobile: true },
+  { href: "/favorites", label: "Favorites", icon: Star, mobile: false },
   { href: "/stats", label: "Statistics", icon: BarChart3, mobile: false },
   { href: "/settings", label: "Settings", icon: Settings, mobile: true },
 ];

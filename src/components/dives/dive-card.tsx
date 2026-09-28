@@ -1,3 +1,4 @@
+import { countryLabel } from "@/lib/country-display";
 import Link from "next/link";
 import { Clock, Fish, MapPin, TrendingDown } from "lucide-react";
 import { formatDateLong, formatDepth, formatMinutes, pluralize } from "@/lib/format";
@@ -7,7 +8,7 @@ import { FavoriteButton } from "./favorite-button";
 
 /** Große Card für das Dive Log. */
 export function DiveCard({ dive }: { dive: DiveListItem }) {
-  const place = [dive.site.location, dive.site.country].filter(Boolean).join(", ");
+  const place = [dive.site.location, countryLabel(dive.site.country, dive.site.countryCode)].filter(Boolean).join(", ");
   return (
     <article className="relative overflow-hidden rounded-2xl border border-border/70 bg-card transition-transform active:scale-[0.99]">
       <Link href={`/dives/${dive.id}`} className="block" aria-label={`${dive.site.name}, ${formatDateLong(dive.date)}`}>
