@@ -16,9 +16,15 @@ export const IMPORT_SOURCES: ImportSourceInfo[] = [
   },
   {
     source: "ssi",
-    label: "SSI",
-    description: "Dive logs, wildlife and dive sites from your SSI account.",
-    status: "planned",
+    label: "SSI (MySSI account)",
+    description: "Download all dives from your SSI logbook. Re-syncs update without duplicates.",
+    status: "available",
+  },
+  {
+    source: "ssi-csv",
+    label: "SSI CSV export",
+    description: "Fallback: upload the CSV export from my.divessi.com.",
+    status: "available",
   },
   {
     source: "suunto",

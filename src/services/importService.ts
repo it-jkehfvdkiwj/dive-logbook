@@ -118,6 +118,14 @@ export async function runImport(importer: DiveImporter): Promise<ImportResult> {
   try {
     const raw = await importer.importDives();
 
+    // Performance: bestehende Dives dieser Quelle einmal laden, Sites pro Lauf cachen.
+    // Unveränderte Dives kosten so keine Einzel-Queries (wichtig bei vielen Dives / weit entfernter DB).
+    const existingDives = await db.dive.findMany({ where: { source: importer.source, externalId: { not: null } } });
+    const existingByExt = new Map(existingDives.map((d) => [d.externalId!, d]));
+    const siteCache = new Map<string, string>();
+    const unchangedIds: string[] = [];
+    const now = new Date();
+
     for (const item of raw) {
       const parsed = importedDiveSchema.safeParse(item);
       if (!parsed.success) {
@@ -130,32 +138,32 @@ export async function runImport(importer: DiveImporter): Promise<ImportResult> {
         continue;
       }
       const dive = parsed.data;
-
-      await db.$transaction(async (tx) => {
-        const now = new Date();
-        const diveSiteId = await resolveSite(
-          {
-            name: dive.site.name,
-            location: dive.site.location ?? null,
-            country: dive.site.country ?? null,
-            latitude: dive.site.latitude ?? null,
-            longitude: dive.site.longitude ?? null,
-            source: importer.source,
-            externalId: dive.site.externalId ?? null,
-          },
-          tx,
-        );
-        const data = toSyncData(dive);
-
-        const existing = await tx.dive.findUnique({
-          where: { source_externalId: { source: importer.source, externalId: dive.externalId } },
+      const siteKey =
+        dive.site.externalId ??
+        [dive.site.name, dive.site.location ?? "", dive.site.country ?? ""].join("|").toLowerCase();
+      let diveSiteId = siteCache.get(siteKey);
+      if (!diveSiteId) {
+        diveSiteId = await resolveSite({
+          name: dive.site.name,
+          location: dive.site.location ?? null,
+          country: dive.site.country ?? null,
+          latitude: dive.site.latitude ?? null,
+          longitude: dive.site.longitude ?? null,
+          source: importer.source,
+          externalId: dive.site.externalId ?? null,
         });
+        siteCache.set(siteKey, diveSiteId);
+      }
+      const siteId = diveSiteId;
+      const data = toSyncData(dive);
+      const existing = existingByExt.get(dive.externalId);
 
-        if (!existing) {
+      if (!existing) {
+        await db.$transaction(async (tx) => {
           const created = await tx.dive.create({
             data: {
               ...data,
-              diveSiteId,
+              diveSiteId: siteId,
               source: importer.source,
               externalId: dive.externalId,
               lastSyncedAt: now,
@@ -172,18 +180,28 @@ export async function runImport(importer: DiveImporter): Promise<ImportResult> {
             },
           });
           await syncSightings(tx, importer.source, created.id, dive.sightings);
-          result.created++;
-          return;
-        }
+          existingByExt.set(dive.externalId, created);
+        });
+        result.created++;
+        continue;
+      }
 
-        const protectedFields = settings.syncOverwriteManualEdits ? new Set<string>() : new Set(existing.manuallyEditedFields);
-        const update: Prisma.DiveUncheckedUpdateInput = {};
-        for (const field of SYNC_FIELDS) {
-          if (protectedFields.has(field)) continue;
-          if (!same(existing[field], data[field])) Object.assign(update, { [field]: data[field] });
-        }
-        if (!protectedFields.has("diveSite") && existing.diveSiteId !== diveSiteId) update.diveSiteId = diveSiteId;
+      const protectedFields = settings.syncOverwriteManualEdits ? new Set<string>() : new Set(existing.manuallyEditedFields);
+      const update: Prisma.DiveUncheckedUpdateInput = {};
+      for (const field of SYNC_FIELDS) {
+        if (protectedFields.has(field)) continue;
+        if (!same(existing[field], data[field])) Object.assign(update, { [field]: data[field] });
+      }
+      if (!protectedFields.has("diveSite") && existing.diveSiteId !== siteId) update.diveSiteId = siteId;
 
+      const changed = Object.keys(update).length > 0;
+      if (!changed && !dive.sightings?.length && !settings.syncOverwriteManualEdits) {
+        unchangedIds.push(existing.id);
+        result.skipped++;
+        continue;
+      }
+
+      await db.$transaction(async (tx) => {
         await tx.dive.update({
           where: { id: existing.id },
           data: {
@@ -193,9 +211,13 @@ export async function runImport(importer: DiveImporter): Promise<ImportResult> {
           },
         });
         await syncSightings(tx, importer.source, existing.id, dive.sightings);
-        if (Object.keys(update).length) result.updated++;
-        else result.skipped++;
       });
+      if (changed) result.updated++;
+      else result.skipped++;
+    }
+
+    if (unchangedIds.length) {
+      await db.dive.updateMany({ where: { id: { in: unchangedIds } }, data: { lastSyncedAt: now } });
     }
 
     await deleteOrphanSites();
@@ -208,17 +230,25 @@ export async function runImport(importer: DiveImporter): Promise<ImportResult> {
         updated: result.updated,
         skipped: result.skipped,
         error: result.errors.length ? `${result.errors.length} invalid record(s)` : null,
+        log: buildLog(importer, result),
       },
     });
+    result.log = importer.diagnostics?.();
     return result;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await db.importRun.update({
       where: { id: run.id },
-      data: { status: "failed", finishedAt: new Date(), error: message },
+      data: { status: "failed", finishedAt: new Date(), error: message, log: buildLog(importer, result) },
     });
     throw err;
   }
+}
+
+function buildLog(importer: DiveImporter, result: ImportResult): string | null {
+  const lines = [...(importer.diagnostics?.() ?? [])];
+  for (const e of result.errors.slice(0, 10)) lines.push(`invalid ${e.externalId ?? "?"}: ${e.message}`);
+  return lines.length ? lines.join("\n").slice(0, 8000) : null;
 }
 
 export async function listImportRuns(take = 10) {

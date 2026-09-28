@@ -81,6 +81,35 @@ Kosten: Vercel Hobby und Neon Free sind für eine persönliche App kostenlos.
 
 ---
 
+## 3a. SSI-Logbuch synchronisieren
+
+Die App lädt deine Tauchgänge direkt aus deinem SSI-Konto (MySSI). Genutzt wird dieselbe Schnittstelle wie von der MySSI-App, nach dem Vorbild von [divessi-export](https://github.com/gerardpuig/divessi-export).
+
+**Einmalig ohne Einrichtung:** App → **Settings → SSI Logbook** → SSI-E-Mail + Passwort eingeben → **Download dives from SSI**. Die Zugangsdaten werden nicht gespeichert.
+
+**Dauerhaft mit „Sync now“ und nächtlichem Auto-Sync:**
+1. Vercel → Projekt → **Settings → Environment Variables** → hinzufügen:
+   | Name | Wert |
+   | --- | --- |
+   | `SSI_EMAIL` | deine MySSI-E-Mail |
+   | `SSI_PASSWORD` | dein MySSI-Passwort |
+   | `CRON_SECRET` | beliebige lange Zufallszeichenfolge (aktiviert den täglichen Sync um 04:00 UTC) |
+2. **Deployments → ⋯ → Redeploy**.
+3. In der App: **Settings → SSI Logbook → Sync now**.
+
+**So funktioniert der Abgleich:**
+- Jeder SSI-Dive wird über seine SSI-ID erkannt. Erneutes Synchronisieren erzeugt **keine Duplikate**.
+- In SSI geänderte Dives werden aktualisiert. Felder, die du **in der App** geändert hast, bleiben erhalten (umschaltbar unter „Sync may overwrite my edits“).
+- Übernommen werden: Nummer, Datum, Uhrzeit, Tauchplatz (+ Land/Koordinaten, falls vorhanden), max./durchschn. Tiefe, Dauer, Wassertemperatur, Tauchbasis, Kommentar. Gas/Flasche/Druck/Blei landen als Zeile „SSI: …“ in den Notizen.
+- Die Richtung ist nur **SSI → App**. Ein Zurückschreiben nach SSI gibt es nicht, weil SSI dafür keine Schnittstelle anbietet.
+- Unter **Settings → Recent imports** gibt es pro Lauf ein Protokoll (nur Feldnamen und Anzahlen, keine Zugangsdaten).
+
+**Fallback – CSV:** Auf my.divessi.com das Logbuch als CSV exportieren → App → Settings → **Upload SSI CSV**. Diese Variante enthält weniger Felder. Verwende sie nicht zusätzlich zum Konto-Sync, sonst entstehen doppelte Dives.
+
+> ⚠️ Die SSI-Schnittstelle ist nicht offiziell dokumentiert. Ändert SSI sie, kann der Sync fehlschlagen. Die Fehlermeldung steht dann im Import-Protokoll, und der CSV-Weg funktioniert weiterhin.
+
+---
+
 ## 4. Lokale Entwicklung
 
 Voraussetzungen: Node.js ≥ 20.9, Docker (oder eigene PostgreSQL-Instanz).
@@ -149,10 +178,11 @@ GET/POST        /api/species               GET/PUT/DELETE /api/species/:id
 GET/POST        /api/sightings             PUT/DELETE /api/sightings/:id
 GET             /api/stats                 GET/PUT /api/settings
 POST            /api/import/json           DELETE /api/demo-data
+POST            /api/import/ssi            POST /api/import/ssi-csv · GET /api/import/ssi/cron (Vercel Cron)
 POST            /api/auth/login · /api/auth/logout
 ```
 
-**SSI später:** `SSIImporter.importDives()` in `src/importers/ssiImporter.ts` implementieren (Rohdaten → `ImportedDive`). Abgleich, Create/Update und Schutz manueller Änderungen übernimmt bereits `runImport()`.
+**SSI:** `src/importers/ssi/client.ts` (API-Aufrufe) → `src/importers/ssi/mapper.ts` (Rohdaten → `ImportedDive`) → `runImport()` (Abgleich, Create/Update, Schutz manueller Änderungen). CSV-Fallback: `src/importers/ssiCsvImporter.ts`.
 
 ---
 

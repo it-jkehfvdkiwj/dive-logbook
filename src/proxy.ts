@@ -1,8 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, isAuthEnabled, safeEqual, sessionToken } from "@/lib/auth";
 
-// Öffentliche Pfade: Login, PWA-Dateien (Safari lädt Manifest/Icons ohne Cookie)
-const PUBLIC_PATHS = ["/login", "/api/auth/login", "/manifest.webmanifest", "/sw.js", "/offline.html"];
+// Öffentliche Pfade: Login, PWA-Dateien (Safari lädt Manifest/Icons ohne Cookie),
+// Cron-Route (prüft selbst CRON_SECRET)
+const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/import/ssi/cron", "/manifest.webmanifest", "/sw.js", "/offline.html"];
 
 export async function proxy(request: NextRequest) {
   if (!isAuthEnabled()) return NextResponse.next();

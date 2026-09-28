@@ -153,6 +153,8 @@ model ImportRun {
   updated    Int       @default(0)
   skipped    Int       @default(0)
   error      String?
+  /// Diagnose-Protokoll (nur Feldnamen/Zähler, keine Zugangsdaten)
+  log        String?
 }
 
 /// Singleton (id = 1) für App-Einstellungen.

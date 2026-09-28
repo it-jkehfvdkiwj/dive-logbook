@@ -77,6 +77,8 @@ export interface DiveImporter {
   /** Anzeigename in der UI */
   readonly label: string;
   importDives(): Promise<ImportedDive[]>;
+  /** Optionale Diagnosezeilen (z. B. gefundene Feldnamen) – werden im ImportRun gespeichert. */
+  diagnostics?(): string[];
 }
 
 export interface ImportResult {
@@ -86,4 +88,5 @@ export interface ImportResult {
   updated: number;
   skipped: number;
   errors: { externalId?: string; message: string }[];
+  log?: string[];
 }

@@ -1,27 +1,38 @@
 import type { DiveImporter, ImportedDive } from "./types";
+import { ssiAuthenticate, ssiGetDivelog } from "./ssi/client";
+import { mapSsiLogbook } from "./ssi/mapper";
 
 /**
- * Platzhalter für den späteren SSI-Import. Bewusst NICHT implementiert.
- *
- * Geplanter Ablauf:
- *  1. Rohdaten von SSI beziehen (offizieller Export / API – kein Scraping, kein Login-Nachbau).
- *  2. Jeden SSI-Datensatz in ein `ImportedDive` übersetzen, z. B.:
- *       SSI dive id      → externalId
- *       dive date/time   → date ("YYYY-MM-DD") + startTime ("HH:mm")
- *       max depth        → maxDepth (m)
- *       bottom time      → duration (min)
- *       dive site (+id)  → site { name, location, country, latitude, longitude, externalId }
- *       wildlife entries → sightings [{ commonName, scientificName, speciesExternalId, count }]
- *  3. Der ImportService erledigt Dublettenprüfung (source="ssi" + externalId),
- *     Create/Update und den Schutz manuell geänderter Felder.
- *
- * Dadurch hängt die interne Datenbank nie vom SSI-Format ab.
+ * SSI-Import über die (inoffizielle) MySSI-App-API.
+ * Zugangsdaten werden nur für diesen Abruf verwendet und nie gespeichert.
+ * Abgleich, Create/Update und Schutz manueller Änderungen übernimmt runImport().
  */
 export class SSIImporter implements DiveImporter {
   readonly source = "ssi";
   readonly label = "SSI";
+  private log: string[] = [];
+
+  constructor(
+    private readonly email: string,
+    private readonly password: string,
+  ) {}
 
   async importDives(): Promise<ImportedDive[]> {
-    throw new Error("SSI import is not implemented yet.");
+    const token = await ssiAuthenticate(this.email, this.password);
+    const raw = await ssiGetDivelog(token);
+    const { dives, diagnostics } = mapSsiLogbook(raw);
+    this.log = diagnostics;
+    return dives;
   }
+
+  diagnostics(): string[] {
+    return this.log;
+  }
+}
+
+/** Zugangsdaten aus den Umgebungsvariablen (für "Sync now" ohne Eingabe und den täglichen Cron). */
+export function ssiCredentialsFromEnv(): { email: string; password: string } | null {
+  const email = process.env.SSI_EMAIL?.trim();
+  const password = process.env.SSI_PASSWORD;
+  return email && password ? { email, password } : null;
 }
