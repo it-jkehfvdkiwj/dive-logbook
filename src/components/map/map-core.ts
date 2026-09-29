@@ -36,6 +36,46 @@ export function styleFor(layer: MapLayer, dark: boolean): string | StyleSpecific
 
 export type MapLibre = typeof import("maplibre-gl");
 
+// Einheitliche Beschriftung: englische Namen statt "ΕΛΛΆΔΑ / GREECE" in mehreren Schriften
+const LABEL_NAME = ["coalesce", ["get", "name:en"], ["get", "name_en"], ["get", "name:latin"], ["get", "name"]];
+
+/** Dunkle Karte aufhellen: Meer in Tiefblau, Land in Schiefergrau – passend zur App. */
+const DARK_TUNING = {
+  land: "#2a323d",
+  water: "#17466b",
+  waterway: "#1f5580",
+  boundary: "#8193a8",
+  text: "#dbe3ec",
+  halo: "#1a2029",
+};
+
+/** Nach jedem Stilwechsel: Labels vereinheitlichen, Dunkelmodus aufhellen. */
+export function tuneStyle(map: MlMap, dark: boolean, layer: MapLayer) {
+  if (layer === "satellite") return;
+  const style = map.getStyle();
+  for (const l of style?.layers ?? []) {
+    try {
+      const sourceLayer = "source-layer" in l ? l["source-layer"] : undefined;
+      if (l.type === "symbol") {
+        const field = map.getLayoutProperty(l.id, "text-field");
+        if (field && JSON.stringify(field).includes("name")) map.setLayoutProperty(l.id, "text-field", LABEL_NAME);
+        if (dark) {
+          map.setPaintProperty(l.id, "text-color", DARK_TUNING.text);
+          map.setPaintProperty(l.id, "text-halo-color", DARK_TUNING.halo);
+        }
+        continue;
+      }
+      if (!dark) continue;
+      if (l.type === "background") map.setPaintProperty(l.id, "background-color", DARK_TUNING.land);
+      else if (l.type === "fill" && sourceLayer === "water") map.setPaintProperty(l.id, "fill-color", DARK_TUNING.water);
+      else if (l.type === "line" && sourceLayer === "waterway") map.setPaintProperty(l.id, "line-color", DARK_TUNING.waterway);
+      else if (l.type === "line" && sourceLayer === "boundary") map.setPaintProperty(l.id, "line-color", DARK_TUNING.boundary);
+    } catch {
+      /* einzelne Layer dürfen fehlschlagen */
+    }
+  }
+}
+
 let loader: Promise<MapLibre> | null = null;
 /** maplibre-gl erst im Browser laden (nicht beim Server-Rendering). */
 export function loadMapLibre(): Promise<MapLibre> {

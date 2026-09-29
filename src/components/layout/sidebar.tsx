@@ -12,7 +12,7 @@ export function Sidebar() {
   const pathname = usePathname();
   if (pathname === "/login") return null;
   return (
-    <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-border/60 bg-card/40 px-4 py-6 lg:flex">
+    <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col overflow-y-auto border-r border-border/60 bg-card/40 px-4 pb-6 pt-[calc(env(safe-area-inset-top)+1.5rem)] lg:flex">
       <Link href="/" className="mb-8 flex items-center gap-3 px-2">
         <AppMark className="size-9" />
         <div className="leading-tight">

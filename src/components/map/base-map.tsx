@@ -6,7 +6,7 @@ import { useTheme } from "next-themes";
 import type { Map as MlMap } from "maplibre-gl";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { FALLBACK_STYLE, loadMapLibre, styleFor, type MapLayer, type MapLibre } from "./map-core";
+import { FALLBACK_STYLE, loadMapLibre, styleFor, tuneStyle, type MapLayer, type MapLibre } from "./map-core";
 
 interface BaseMapProps {
   className?: string;
@@ -32,6 +32,10 @@ export function BaseMap({ className, layer = "map", center = [15, 20], zoom = 1.
   const dark = resolvedTheme === "dark";
   const styleKey = `${layer}-${dark}`;
   const appliedStyle = useRef(styleKey);
+  const tuningRef = useRef({ dark, layer });
+  useEffect(() => {
+    tuningRef.current = { dark, layer };
+  }, [dark, layer]);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -59,6 +63,7 @@ export function BaseMap({ className, layer = "map", center = [15, 20], zoom = 1.
         // (Vektorkarte lädt mobil teils langsam; "load" kommt erst danach).
         onReadyRef.current?.(map, ml);
         const markLoaded = () => !cancelled && setLoaded(true);
+        map.on("style.load", () => tuneStyle(map, tuningRef.current.dark, tuningRef.current.layer));
         map.once("styledata", markLoaded);
         map.once("load", markLoaded);
         // Nur wenn der Kartenstil selbst nicht geladen werden kann: einfacher Hintergrund

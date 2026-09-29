@@ -421,7 +421,7 @@ function SiteCard({ site, onClose, onEditLocation }: { site: MapSite; onClose: (
   ].filter(Boolean);
 
   return (
-    <div className="absolute inset-x-3 bottom-3 z-20 mx-auto max-w-md animate-sheet lg:left-auto lg:right-4 lg:top-4 lg:bottom-auto lg:mx-0 lg:w-96">
+    <div className="absolute inset-x-3 bottom-3 z-20 mx-auto max-w-md animate-sheet lg:bottom-auto lg:left-auto lg:right-4 lg:top-[calc(env(safe-area-inset-top)+128px)] lg:mx-0 lg:w-96">
       <div className="flex max-h-[min(52dvh,460px)] flex-col overflow-hidden rounded-3xl border border-black/5 bg-background/95 shadow-2xl backdrop-blur-xl">
         <div className="relative px-5 pb-3 pt-4">
           <button
