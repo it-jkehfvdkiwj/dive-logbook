@@ -332,7 +332,7 @@ export async function runImport(importer: DiveImporter, userId: string): Promise
 function buildLog(importer: DiveImporter, result: ImportResult): string | null {
   const lines = [...(importer.diagnostics?.() ?? [])];
   for (const e of result.errors.slice(0, 10)) lines.push(`invalid ${e.externalId ?? "?"}: ${e.message}`);
-  return lines.length ? lines.join("\n").slice(0, 12000) : null;
+  return lines.length ? lines.map((l) => (l.length > 1500 ? `${l.slice(0, 1500)}…` : l)).join("\n").slice(0, 30000) : null;
 }
 
 export async function listImportRuns(userId: string, take = 10) {

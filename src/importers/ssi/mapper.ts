@@ -3,7 +3,7 @@
 // Felder gibt es vorsichtige Heuristiken. Nichts hier hängt am internen DB-Modell.
 
 import type { ImportedDive } from "../types";
-import { parseProfile, type ProfileSample } from "@/lib/profile";
+import { mergeSeries, parseProfile, parseSeries, type ProfileSample } from "@/lib/profile";
 
 type Raw = Record<string, unknown>;
 
@@ -139,7 +139,28 @@ const PROFILE_KEY = /(profile|sample|graph|chart|waypoint|dc_?data|computer_?dat
 const NOT_PROFILE_KEY = /(comment|gear|animal|buddy|buddies|name|note|_ref$|_id$|_ids$|url|photo|image)/i;
 
 /** Profil aus einem Log-Eintrag: Felder mit passendem Namen, sonst lange Listen/Texte. */
+/** Zeitreihen, die SSI pro Log speichert (Tauchcomputer-Import, z. B. Suunto/Garmin/Shearwater). */
+const SSI_DEPTH_SET = "odin_user_log_depthDataset";
+const SSI_TEMP_SET = "odin_user_log_tempDataset";
+const SSI_TANK_SET = "odin_user_log_tankPressureDataset";
+
 export function profileFromEntry(d: Raw, hint: { maxDepth: number | null; durationMin: number | null }): { key: string; samples: ProfileSample[] } | null {
+  const depthSet = d[SSI_DEPTH_SET];
+  if (depthSet != null && depthSet !== "") {
+    let samples = parseProfile(depthSet, hint);
+    if (samples) {
+      const dur = hint.durationMin ? hint.durationMin * 60 : samples[samples.length - 1].t;
+      const temp = parseSeries(d[SSI_TEMP_SET], dur);
+      if (temp) samples = mergeSeries(samples, temp, "temp");
+      const tank = parseSeries(d[SSI_TANK_SET], dur);
+      if (tank) samples = mergeSeries(samples, tank, "p");
+      return { key: SSI_DEPTH_SET, samples };
+    }
+  }
+  return genericProfileFromEntry(d, hint);
+}
+
+function genericProfileFromEntry(d: Raw, hint: { maxDepth: number | null; durationMin: number | null }): { key: string; samples: ProfileSample[] } | null {
   const entries = Object.entries(d).filter(([k, v]) => v != null && v !== "" && !NOT_PROFILE_KEY.test(k));
   const named = entries.filter(([k]) => PROFILE_KEY.test(k));
   const other = entries.filter(
@@ -321,20 +342,20 @@ export function mapSsiLogbook(raw: Raw, animalCatalog: Raw[] | null = null): Ssi
     `site country fields: ${countryKeys.map((k) => `${k}=${JSON.stringify(rawSiteList.find((x) => x[k] != null)?.[k] ?? null)?.slice(0, 40)}`).join("; ") || "(none)"}`,
   );
   diagnostics.push(`sites with GPS: ${[...sites.values()].filter((x) => x.latitude != null).length}/${sites.size}`);
-  const firstEntry = details.find(isRecord);
-  if (firstEntry) diagnostics.push(`log entry fields: ${Object.keys(firstEntry).join(", ")}`);
-  const candidateInfo = new Map<string, string>();
-  for (const e of details.slice(0, 200)) {
-    if (!isRecord(e)) continue;
-    for (const [k, v] of Object.entries(e)) {
-      if (candidateInfo.has(k) || v == null || v === "") continue;
-      if (PROFILE_KEY.test(k) || /divecomputer|computer|dc_/i.test(k) || (Array.isArray(v) && v.length >= 5) || (typeof v === "string" && v.length >= 60 && !NOT_PROFILE_KEY.test(k))) {
-        const shown = typeof v === "string" ? JSON.stringify(v.slice(0, 60)) : JSON.stringify(v)?.slice(0, 60);
-        candidateInfo.set(k, `${k}=${Array.isArray(v) ? `array(${v.length})` : typeof v} ${shown}`);
-      }
-    }
+  // Profil-Diagnose: Beispielwerte der Datensatz-Felder eines Dives mit Tauchcomputer-Daten
+  const dcEntry =
+    details.find((x) => isRecord(x) && x[SSI_DEPTH_SET] != null && x[SSI_DEPTH_SET] !== "" && x[SSI_DEPTH_SET] !== "[]") ??
+    details.find(isRecord);
+  if (isRecord(dcEntry)) {
+    const show = (v: unknown) => {
+      const t = typeof v === "string" ? v : JSON.stringify(v);
+      return `${Array.isArray(v) ? `array(${v.length})` : typeof v} ${t?.slice(0, 160) ?? ""}${t && t.length > 160 ? `… (${t.length} chars)` : ""}`;
+    };
+    const keys = Object.keys(dcEntry).filter((k) => /dataset|divecomputer|diveComputer|charts/i.test(k));
+    for (const k of keys) diagnostics.unshift(`profile field ${k}: ${show(dcEntry[k])}`);
+    const withSet = details.filter((x) => isRecord(x) && x[SSI_DEPTH_SET] != null && x[SSI_DEPTH_SET] !== "" && x[SSI_DEPTH_SET] !== "[]").length;
+    diagnostics.unshift(`dives with depthDataset: ${withSet}/${details.length}`);
   }
-  diagnostics.push(`profile candidates: ${[...candidateInfo.values()].join("; ") || "(none)"}`);
   const profileByLog = groupByLog(raw, PROFILE_KEY, diagnostics, "profile");
   let withProfile = 0;
   const wildlifeByLog = groupByLog(raw, WILDLIFE_KEY, diagnostics, "wildlife");

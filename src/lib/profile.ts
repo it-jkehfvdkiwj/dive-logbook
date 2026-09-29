@@ -99,6 +99,11 @@ export function extractRawPoints(value: unknown, depth = 0): RawPoint[] | null {
   }
   if (Array.isArray(value)) return toRawPoints(value) ?? null;
   if (isRecord(value)) {
+    // {"0": 0.0, "10": 1.2, …} → Zeit: Wert
+    const keys = Object.keys(value);
+    if (keys.length >= 5 && keys.every((k) => /^\d+(\.\d+)?$/.test(k)) && Object.values(value).every((v) => num(v) != null)) {
+      return toRawPoints(keys.map((k) => [k, value[k]]).sort((a, b) => Number(a[0]) - Number(b[0])));
+    }
     // Bevorzugt Felder mit sprechenden Namen
     const entries = Object.entries(value).sort(([a], [b]) => Number(/sample|profile|point|data|wp/i.test(b)) - Number(/sample|profile|point|data|wp/i.test(a)));
     for (const [, v] of entries) {
@@ -204,4 +209,39 @@ export function parseProfile(value: unknown, hint?: Parameters<typeof normalizeP
   const raw = extractRawPoints(value);
   const samples = raw ? normalizeProfile(raw, hint) : null;
   return samples && isPlausibleProfile(samples, hint ?? {}) ? samples : null;
+}
+
+/** Zeitreihe (Temperatur, Druck …) ohne Einheitenlogik, Zeit in Sekunden relativ zum Profil. */
+export function parseSeries(value: unknown, durationSec: number | null): { t: number; v: number }[] | null {
+  const raw = extractRawPoints(value);
+  if (!raw) return null;
+  const withTime = raw.every((p) => p.t != null);
+  let times: number[];
+  if (withTime) {
+    const t0 = raw[0].t!;
+    times = raw.map((p) => p.t! - t0);
+    const last = times[times.length - 1];
+    if (durationSec && last > 0) {
+      const r = last / durationSec;
+      if (r > 500) times = times.map((t) => t / 1000);
+      else if (r < 0.05) times = times.map((t) => t * 60);
+    }
+  } else {
+    const interval = durationSec ? durationSec / Math.max(1, raw.length - 1) : 10;
+    times = raw.map((_, i) => i * interval);
+  }
+  return raw.map((p, i) => ({ t: times[i], v: p.d }));
+}
+
+/** Temperatur-/Druckreihen an das Tiefenprofil hängen (nächster Zeitpunkt). */
+export function mergeSeries(samples: ProfileSample[], series: { t: number; v: number }[], key: "temp" | "p"): ProfileSample[] {
+  if (!series.length) return samples;
+  const valid = key === "temp" ? (v: number) => v > -3 && v < 45 : (v: number) => v > 0 && v < 400;
+  let j = 0;
+  return samples.map((s) => {
+    while (j < series.length - 1 && Math.abs(series[j + 1].t - s.t) <= Math.abs(series[j].t - s.t)) j++;
+    const v = series[j].v;
+    if (!valid(v)) return s;
+    return { ...s, [key]: key === "temp" ? Math.round(v * 10) / 10 : Math.round(v) };
+  });
 }
