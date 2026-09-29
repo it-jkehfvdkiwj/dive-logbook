@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ProfileSample } from "@/lib/profile";
+import { cleanProfile, type ProfileSample } from "@/lib/profile";
 
 const HEIGHT = 230;
 const PAD = { top: 14, right: 14, bottom: 28, left: 40 };
@@ -16,7 +16,8 @@ function niceStep(range: number, target: number) {
 const fmtTime = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, "0")}`;
 
 /** Tiefenprofil wie im Tauchcomputer: Oberfläche oben, Tiefe nach unten. Tippen/Ziehen zeigt Werte. */
-export function DepthProfileChart({ samples, source }: { samples: ProfileSample[]; source?: string }) {
+export function DepthProfileChart({ samples: rawSamples, source }: { samples: ProfileSample[]; source?: string }) {
+  const samples = useMemo(() => cleanProfile(rawSamples), [rawSamples]);
   const wrapRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const [hover, setHover] = useState<number | null>(null);

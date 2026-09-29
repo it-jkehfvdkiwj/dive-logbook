@@ -173,7 +173,7 @@ export function normalizeProfile(
   }));
   // Zeit muss aufsteigen
   for (let i = 1; i < samples.length; i++) if (samples[i].t < samples[i - 1].t) return null;
-  return downsample(samples, 1500);
+  return downsample(cleanProfile(samples), 1500);
 }
 
 /** Begrenzt die Punktzahl (sehr dichte Profile), erhält Maximaltiefe. */
@@ -244,4 +244,41 @@ export function mergeSeries(samples: ProfileSample[], series: { t: number; v: nu
     if (!valid(v)) return s;
     return { ...s, [key]: key === "temp" ? Math.round(v * 10) / 10 : Math.round(v) };
   });
+}
+
+/**
+ * Entfernt Messfehler: einzelne Punkte oder kurze Folgen, die mitten im Tauchgang
+ * schlagartig auf ~0 m springen (Aussetzer des Sensors / leere Datensätze).
+ * Kriterium ist die Vertikalgeschwindigkeit – echte Auf-/Abstiege sind viel langsamer.
+ */
+export function cleanProfile(samples: ProfileSample[], maxSpeed = 0.8): ProfileSample[] {
+  if (samples.length < 5) return samples;
+  const shallow = (s: ProfileSample) => s.d < 0.5;
+  const speed = (a: ProfileSample, b: ProfileSample) => Math.abs(b.d - a.d) / Math.max(1, b.t - a.t);
+  const drop = new Set<number>();
+
+  // 1) Folgen von ~0 m zwischen tieferen Punkten mit unmöglichem Sprung
+  for (let i = 1; i < samples.length - 1; i++) {
+    if (!shallow(samples[i])) continue;
+    let j = i;
+    while (j + 1 < samples.length && shallow(samples[j + 1])) j++;
+    if (j < samples.length - 1) {
+      const before = samples[i - 1];
+      const after = samples[j + 1];
+      const tooFast = speed(before, samples[i]) > maxSpeed || speed(samples[j], after) > maxSpeed;
+      if (tooFast && before.d > 1.5 && after.d > 1.5 && j - i < 6) for (let k = i; k <= j; k++) drop.add(k);
+    }
+    i = j;
+  }
+  let out = samples.filter((_, i) => !drop.has(i));
+
+  // 2) Einzelne Ausreißer (hin und sofort zurück)
+  out = out.filter((s, i) => {
+    if (i === 0 || i === out.length - 1) return true;
+    const a = out[i - 1];
+    const b = out[i + 1];
+    const spike = speed(a, s) > maxSpeed * 1.5 && speed(s, b) > maxSpeed * 1.5 && Math.sign(s.d - a.d) !== Math.sign(b.d - s.d);
+    return !(spike && Math.abs(a.d - b.d) < Math.abs(s.d - a.d) / 2);
+  });
+  return out.length >= 5 ? out : samples;
 }
