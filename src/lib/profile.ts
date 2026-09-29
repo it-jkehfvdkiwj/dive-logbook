@@ -251,7 +251,7 @@ export function mergeSeries(samples: ProfileSample[], series: { t: number; v: nu
  * schlagartig auf ~0 m springen (Aussetzer des Sensors / leere Datensätze).
  * Kriterium ist die Vertikalgeschwindigkeit – echte Auf-/Abstiege sind viel langsamer.
  */
-export function cleanProfile(samples: ProfileSample[], maxSpeed = 0.8): ProfileSample[] {
+export function cleanProfile(samples: ProfileSample[], maxSpeed = 0.3): ProfileSample[] {
   if (samples.length < 5) return samples;
   const shallow = (s: ProfileSample) => s.d < 0.5;
   const speed = (a: ProfileSample, b: ProfileSample) => Math.abs(b.d - a.d) / Math.max(1, b.t - a.t);
@@ -265,8 +265,9 @@ export function cleanProfile(samples: ProfileSample[], maxSpeed = 0.8): ProfileS
     if (j < samples.length - 1) {
       const before = samples[i - 1];
       const after = samples[j + 1];
-      const tooFast = speed(before, samples[i]) > maxSpeed || speed(samples[j], after) > maxSpeed;
-      if (tooFast && before.d > 1.5 && after.d > 1.5 && j - i < 6) for (let k = i; k <= j; k++) drop.add(k);
+      // Hoch UND sofort wieder runter – schneller als jeder echte Auf-/Abstieg (~0,15 m/s)
+      const tooFast = speed(before, samples[i]) > maxSpeed && speed(samples[j], after) > maxSpeed;
+      if (tooFast && before.d > 1 && after.d > 1 && j - i < 6) for (let k = i; k <= j; k++) drop.add(k);
     }
     i = j;
   }
@@ -277,7 +278,7 @@ export function cleanProfile(samples: ProfileSample[], maxSpeed = 0.8): ProfileS
     if (i === 0 || i === out.length - 1) return true;
     const a = out[i - 1];
     const b = out[i + 1];
-    const spike = speed(a, s) > maxSpeed * 1.5 && speed(s, b) > maxSpeed * 1.5 && Math.sign(s.d - a.d) !== Math.sign(b.d - s.d);
+    const spike = speed(a, s) > maxSpeed * 2 && speed(s, b) > maxSpeed * 2 && Math.sign(s.d - a.d) !== Math.sign(b.d - s.d);
     return !(spike && Math.abs(a.d - b.d) < Math.abs(s.d - a.d) / 2);
   });
   return out.length >= 5 ? out : samples;
