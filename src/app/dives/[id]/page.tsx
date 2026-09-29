@@ -7,6 +7,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { DepthCover } from "@/components/dives/depth-cover";
 import { FavoriteButton } from "@/components/dives/favorite-button";
 import { SiteMiniMap } from "@/components/map/site-mini-map";
+import { DepthProfileChart } from "@/components/dives/depth-profile-chart";
 import { SightingsSection } from "@/components/dives/sightings-section";
 import { PhotosSection } from "@/components/dives/photos-section";
 import {
@@ -112,6 +113,12 @@ export default async function DiveDetailPage({ params }: PageProps<"/dives/[id]"
         <div className="mt-4 rounded-2xl bg-accent/60 p-4">
           <Quote className="mb-1 size-5 text-primary" />
           <p className="whitespace-pre-line text-[16px] leading-relaxed">{dive.notes}</p>
+        </div>
+      )}
+
+      {dive.profile && (
+        <div className="mt-8">
+          <DepthProfileChart samples={dive.profile.samples} source={dive.profile.source} />
         </div>
       )}
 

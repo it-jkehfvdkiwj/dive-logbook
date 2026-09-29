@@ -27,7 +27,12 @@ export async function syncSsi(user: Actor, credentials?: { email?: string | null
     throw new ValidationError("Please enter your SSI e-mail and password.");
   }
   try {
-    return await runImport(new SSIImporter(creds.email, creds.password), user.id);
+    const withProfile = await db.dive.findMany({
+      where: { userId: user.id, source: "ssi", externalId: { not: null }, profile: { isNot: null } },
+      select: { externalId: true },
+    });
+    const have = new Set(withProfile.map((d) => d.externalId!));
+    return await runImport(new SSIImporter(creds.email, creds.password, have), user.id);
   } catch (err) {
     if (err instanceof SsiApiError) {
       throw new AppError(err.message, err.kind === "auth" ? 400 : 502, `ssi_${err.kind}`);

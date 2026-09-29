@@ -3,6 +3,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import { NotFoundError } from "@/lib/errors";
 import type { DiveFilters, DiveInput } from "@/lib/validation/dive";
 import type { DiveDetail, DiveListItem } from "@/types";
+import type { ProfileSample } from "@/lib/profile";
 import { deleteOrphanSites, resolveSite } from "./diveSiteService";
 
 // ---------------------------------------------------------------------------
@@ -159,6 +160,7 @@ export async function getDive(userId: string, id: string): Promise<DiveDetail | 
         orderBy: { createdAt: "asc" },
       },
       photos: { orderBy: { createdAt: "asc" } },
+      profile: { select: { samples: true, source: true } },
     },
   });
   if (!d) return null;
@@ -197,6 +199,7 @@ export async function getDive(userId: string, id: string): Promise<DiveDetail | 
       },
     })),
     pendingSpeciesCount: d.pendingExternalSpecies.length,
+    profile: d.profile ? { samples: d.profile.samples as unknown as ProfileSample[], source: d.profile.source } : null,
     photos: d.photos.map((p) => ({
       id: p.id,
       url: p.url,

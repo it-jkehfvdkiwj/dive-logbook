@@ -104,6 +104,12 @@ Kosten: Vercel Hobby und Neon Free sind für eine persönliche App kostenlos.
 - **Plätze ohne GPS** / falsche Position: Map → Chip „… without GPS“ bzw. Pin → **Edit location**. Karte unter die Nadel schieben, „Mein Standort“ oder Koordinaten einfügen. Gilt für alle Dives an diesem Platz; der SSI-Sync überschreibt die Korrektur nicht.
 - Kartendaten: [OpenFreeMap](https://openfreemap.org) / © OpenMapTiles / © OpenStreetMap, Satellit: Esri World Imagery. Kein API-Key nötig.
 
+## 3e. Tauchprofil (Tauchcomputer-Daten)
+
+- Hat ein Dive ein Profil, zeigt die Dive-Seite das Tiefendiagramm (antippen/ziehen zeigt Zeit, Tiefe, Temperatur, Flaschendruck).
+- Beim SSI-Sync wird das Profil im Logbuch gesucht und – falls dort nicht enthalten – über einen Profil-Endpunkt pro Dive abgerufen (inoffiziell, wird automatisch gesucht). Das Ergebnis steht im Import-Log („profile probe …“).
+- Funktionierenden Endpunkt fest einstellen: Vercel-Variable `SSI_PROFILE_ENDPOINT`, z. B. `get_dive_profile:log_id`.
+
 ## 3a. SSI-Logbuch synchronisieren
 
 Die App lädt deine Tauchgänge direkt aus deinem SSI-Konto (MySSI). Genutzt wird dieselbe Schnittstelle wie von der MySSI-App, nach dem Vorbild von [divessi-export](https://github.com/gerardpuig/divessi-export).

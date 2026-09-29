@@ -1,6 +1,26 @@
 import type { DiveImporter, ImportedDive } from "./types";
 import { ssiAuthenticate, ssiGetDivelog, ssiTryCall } from "./ssi/client";
 import { findCatalogList, mapSsiLogbook, parseIdList } from "./ssi/mapper";
+import { parseProfile } from "@/lib/profile";
+
+/** Kandidaten für einen Profil-Endpunkt pro Tauchgang (nicht dokumentiert → ausprobieren). */
+const PROFILE_ENDPOINTS = [
+  "get_dive_profile",
+  "get_divelog_profile",
+  "get_log_profile",
+  "get_profile",
+  "get_profiles",
+  "get_dive_samples",
+  "get_samples",
+  "get_divecomputer_data",
+  "get_dc_data",
+  "get_log",
+  "get_dive",
+  "get_log_details",
+  "get_divelog_details",
+  "get_divelog_entry",
+];
+const PROFILE_ID_PARAMS = ["log_id", "id", "odin_user_log_id", "user_log_id"];
 
 /**
  * SSI-Import über die (inoffizielle) MySSI-App-API.
@@ -15,6 +35,8 @@ export class SSIImporter implements DiveImporter {
   constructor(
     private readonly email: string,
     private readonly password: string,
+    /** SSI-Log-IDs, deren Profil schon gespeichert ist (spart Abrufe) */
+    private readonly haveProfile: Set<string> = new Set(),
   ) {}
 
   async importDives(): Promise<ImportedDive[]> {
@@ -23,6 +45,7 @@ export class SSIImporter implements DiveImporter {
     const probeLog: string[] = [];
     const catalog = await this.findAnimalCatalog(token, raw, probeLog);
     const { dives, diagnostics } = mapSsiLogbook(raw, catalog);
+    await this.fetchProfiles(token, dives, probeLog);
     this.log = [...diagnostics, ...probeLog];
     return dives;
   }
@@ -91,6 +114,55 @@ export class SSIImporter implements DiveImporter {
       if (list) return list;
     }
     return null;
+  }
+
+  /**
+   * Stehen die Profile nicht im Logbuch selbst, wird ein Endpunkt pro Dive gesucht
+   * (parallel, kurzer Timeout) und – falls gefunden – für alle Dives ohne Profil genutzt.
+   */
+  private async fetchProfiles(token: string, dives: ImportedDive[], log: string[]) {
+    if (!dives.length || dives.some((d) => d.profile?.length)) return;
+    const probeDive = dives.find((d) => /^\d+$/.test(d.externalId) && d.maxDepth && d.duration);
+    if (!probeDive) return;
+    const hintFor = (d: ImportedDive) => ({ maxDepth: d.maxDepth ?? null, durationMin: d.duration ?? null });
+
+    const override = process.env.SSI_PROFILE_ENDPOINT; // z. B. "get_dive_profile:log_id"
+    const combos = override
+      ? [{ what: override.split(":")[0], param: override.split(":")[1] ?? "log_id" }]
+      : PROFILE_ENDPOINTS.flatMap((what) => PROFILE_ID_PARAMS.slice(0, 2).map((param) => ({ what, param })));
+
+    const results = await Promise.all(
+      combos.map(async (c) => {
+        const data = await ssiTryCall(token, c.what, { [c.param]: probeDive.externalId }, 8000);
+        return { ...c, data, samples: data ? parseProfile(data, hintFor(probeDive)) : null };
+      }),
+    );
+    const hit = results.find((r) => r.samples);
+    const answered = results.filter((r) => r.data != null && !(typeof r.data === "object" && r.data && "error" in r.data));
+    log.push(
+      `profile probe (dive ${probeDive.externalId}): ${
+        hit
+          ? `found via ${hit.what}?${hit.param}= (${hit.samples!.length} points)`
+          : `nothing found; answers: ${answered.map((r) => `${r.what}?${r.param}→${JSON.stringify(r.data)?.slice(0, 80)}`).join(" | ") || "none"}`
+      }`,
+    );
+    if (!hit) return;
+
+    const todo = dives.filter((d) => /^\d+$/.test(d.externalId) && !this.haveProfile.has(d.externalId)).slice(0, 150);
+    let found = 0;
+    for (let i = 0; i < todo.length; i += 6) {
+      await Promise.all(
+        todo.slice(i, i + 6).map(async (d) => {
+          const data = d === probeDive ? hit.data : await ssiTryCall(token, hit.what, { [hit.param]: d.externalId }, 10000);
+          const samples = data ? parseProfile(data, hintFor(d)) : null;
+          if (samples) {
+            d.profile = samples;
+            found++;
+          }
+        }),
+      );
+    }
+    log.push(`profiles downloaded: ${found} of ${todo.length}`);
   }
 
   diagnostics(): string[] {

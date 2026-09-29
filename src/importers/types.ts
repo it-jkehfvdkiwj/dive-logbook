@@ -66,6 +66,18 @@ export const importedDiveSchema = z.object({
   /** Tier-IDs der Quelle ohne bekannten Namen – werden über ExternalSpeciesMap aufgelöst */
   pendingSpeciesIds: z.array(z.string()).optional(),
   photos: z.array(importedPhotoSchema).optional(),
+  /** Tauchcomputer-Profil (Sekunden/Meter) */
+  profile: z
+    .array(
+      z.object({
+        t: z.number().min(0),
+        d: z.number().min(0).max(400),
+        temp: z.number().optional(),
+        p: z.number().optional(),
+      }),
+    )
+    .min(5)
+    .optional(),
 });
 
 export type ImportedSite = z.infer<typeof importedSiteSchema>;

@@ -19,7 +19,7 @@ export class SsiApiError extends Error {
   }
 }
 
-async function getJson(params: Record<string, string>): Promise<unknown> {
+async function getJson(params: Record<string, string>, timeoutMs = TIMEOUT_MS): Promise<unknown> {
   const url = new URL(SSI_API_URL);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
   url.searchParams.set("ssiapp", SSI_CLIENT_APP);
@@ -28,7 +28,7 @@ async function getJson(params: Record<string, string>): Promise<unknown> {
   try {
     res = await fetch(url, {
       headers: { Accept: "application/json", "User-Agent": "DiveLog/1.0" },
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
       cache: "no-store",
     });
   } catch (err) {
@@ -66,9 +66,14 @@ export async function ssiGetDivelog(token: string): Promise<Record<string, unkno
 }
 
 /** Beliebigen Endpunkt abfragen (für das Suchen des Tier-Katalogs). Fehler → null. */
-export async function ssiTryCall(token: string, what: string, extra: Record<string, string> = {}): Promise<unknown> {
+export async function ssiTryCall(
+  token: string,
+  what: string,
+  extra: Record<string, string> = {},
+  timeoutMs = TIMEOUT_MS,
+): Promise<unknown> {
   try {
-    return await getJson({ what, token, ...extra });
+    return await getJson({ what, token, ...extra }, timeoutMs);
   } catch {
     return null;
   }

@@ -276,6 +276,30 @@ export async function runImport(importer: DiveImporter, userId: string): Promise
       else result.skipped++;
     }
 
+    // Tauchprofile (eigene Tabelle) – nur schreiben, wenn neu oder verändert
+    const withProfiles = raw.filter(
+      (d): d is ImportedDive & { profile: NonNullable<ImportedDive["profile"]> } =>
+        !!(d as ImportedDive)?.profile?.length && existingByExt.has((d as ImportedDive).externalId),
+    );
+    if (withProfiles.length) {
+      const diveIds = withProfiles.map((d) => existingByExt.get(d.externalId)!.id);
+      const current = new Map(
+        (await db.diveProfile.findMany({ where: { diveId: { in: diveIds } }, select: { diveId: true, sampleCount: true, source: true } })).map(
+          (p) => [p.diveId, p],
+        ),
+      );
+      for (const d of withProfiles) {
+        const diveId = existingByExt.get(d.externalId)!.id;
+        const cur = current.get(diveId);
+        if (cur && (cur.source !== importer.source || cur.sampleCount === d.profile.length)) continue; // manuell hochgeladene Profile nicht überschreiben
+        await db.diveProfile.upsert({
+          where: { diveId },
+          create: { diveId, samples: d.profile, sampleCount: d.profile.length, source: importer.source },
+          update: { samples: d.profile, sampleCount: d.profile.length },
+        });
+      }
+    }
+
     if (unchangedIds.length) {
       await db.dive.updateMany({ where: { id: { in: unchangedIds } }, data: { lastSyncedAt: now } });
     }

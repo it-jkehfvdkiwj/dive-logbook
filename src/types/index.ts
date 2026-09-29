@@ -2,6 +2,8 @@
 // Bewusst entkoppelt von Prisma-Typen, damit sich das DB-Schema ändern kann,
 // ohne dass jede Komponente angepasst werden muss.
 
+import type { ProfileSample } from "@/lib/profile";
+
 export interface DiveSiteSummary {
   id: string;
   name: string;
@@ -62,6 +64,8 @@ export interface DiveDetail extends DiveListItem {
   photos: DivePhotoItem[];
   /** Tiere aus SSI, deren Art noch nicht zugeordnet ist */
   pendingSpeciesCount: number;
+  /** Tauchcomputer-Profil */
+  profile: { samples: ProfileSample[]; source: string } | null;
 }
 
 export interface SpeciesSummary {

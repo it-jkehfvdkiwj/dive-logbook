@@ -101,6 +101,7 @@ model Dive {
   /// Externe Tier-IDs (z. B. SSI), deren Art noch unbekannt ist. Werden zu Sightings,
   /// sobald eine Zuordnung in ExternalSpeciesMap existiert.
   pendingExternalSpecies String[] @default([])
+  profile          DiveProfile?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -218,4 +219,17 @@ model ExternalSpeciesMap {
   createdAt  DateTime @default(now())
 
   @@unique([source, externalId])
+}
+
+/// Tauchcomputer-Profil (Tiefe/Temperatur über die Zeit) – eigene Tabelle, damit Listen schlank bleiben
+model DiveProfile {
+  id          String   @id @default(cuid())
+  diveId      String   @unique
+  dive        Dive     @relation(fields: [diveId], references: [id], onDelete: Cascade)
+  /// [{ t: Sekunden, d: Tiefe m, temp?: °C, p?: bar }]
+  samples     Json
+  sampleCount Int
+  source      String   @default("manual")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }

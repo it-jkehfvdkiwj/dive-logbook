@@ -3,6 +3,7 @@
 // Felder gibt es vorsichtige Heuristiken. Nichts hier hängt am internen DB-Modell.
 
 import type { ImportedDive } from "../types";
+import { parseProfile, type ProfileSample } from "@/lib/profile";
 
 type Raw = Record<string, unknown>;
 
@@ -134,6 +135,23 @@ function gearLine(d: Raw): string | null {
 
 const WILDLIFE_KEY = /(fish|animal|wildlife|marine|species|creature|sighting|critter|fauna)/i;
 const BUDDY_KEY = /(buddy|buddies|dive_?partner|divers?_?with|companion)/i;
+const PROFILE_KEY = /(profile|sample|graph|chart|waypoint|dc_?data|computer_?data|depth_?(data|list|log|array|values|points)|log_?data|points|curve)/i;
+const NOT_PROFILE_KEY = /(comment|gear|animal|buddy|buddies|name|note|_ref$|_id$|_ids$|url|photo|image)/i;
+
+/** Profil aus einem Log-Eintrag: Felder mit passendem Namen, sonst lange Listen/Texte. */
+export function profileFromEntry(d: Raw, hint: { maxDepth: number | null; durationMin: number | null }): { key: string; samples: ProfileSample[] } | null {
+  const entries = Object.entries(d).filter(([k, v]) => v != null && v !== "" && !NOT_PROFILE_KEY.test(k));
+  const named = entries.filter(([k]) => PROFILE_KEY.test(k));
+  const other = entries.filter(
+    ([k, v]) => !PROFILE_KEY.test(k) && ((Array.isArray(v) && v.length >= 5) || (typeof v === "string" && v.length >= 60) || isRecord(v)),
+  );
+  for (const [key, v] of [...named, ...other]) {
+    const samples = parseProfile(v, hint);
+    if (samples) return { key, samples };
+  }
+  return null;
+}
+
 const LOG_REF_KEY = /(user_?log_?id|log_?id|logs?_id|dive_?log_?id)$/i;
 
 function nameOf(o: Raw, prefer: RegExp[]): string | null {
@@ -303,6 +321,22 @@ export function mapSsiLogbook(raw: Raw, animalCatalog: Raw[] | null = null): Ssi
     `site country fields: ${countryKeys.map((k) => `${k}=${JSON.stringify(rawSiteList.find((x) => x[k] != null)?.[k] ?? null)?.slice(0, 40)}`).join("; ") || "(none)"}`,
   );
   diagnostics.push(`sites with GPS: ${[...sites.values()].filter((x) => x.latitude != null).length}/${sites.size}`);
+  const firstEntry = details.find(isRecord);
+  if (firstEntry) diagnostics.push(`log entry fields: ${Object.keys(firstEntry).join(", ")}`);
+  const candidateInfo = new Map<string, string>();
+  for (const e of details.slice(0, 200)) {
+    if (!isRecord(e)) continue;
+    for (const [k, v] of Object.entries(e)) {
+      if (candidateInfo.has(k) || v == null || v === "") continue;
+      if (PROFILE_KEY.test(k) || /divecomputer|computer|dc_/i.test(k) || (Array.isArray(v) && v.length >= 5) || (typeof v === "string" && v.length >= 60 && !NOT_PROFILE_KEY.test(k))) {
+        const shown = typeof v === "string" ? JSON.stringify(v.slice(0, 60)) : JSON.stringify(v)?.slice(0, 60);
+        candidateInfo.set(k, `${k}=${Array.isArray(v) ? `array(${v.length})` : typeof v} ${shown}`);
+      }
+    }
+  }
+  diagnostics.push(`profile candidates: ${[...candidateInfo.values()].join("; ") || "(none)"}`);
+  const profileByLog = groupByLog(raw, PROFILE_KEY, diagnostics, "profile");
+  let withProfile = 0;
   const wildlifeByLog = groupByLog(raw, WILDLIFE_KEY, diagnostics, "wildlife");
   const buddiesByLog = groupByLog(raw, BUDDY_KEY, diagnostics, "buddy");
 
@@ -401,6 +435,14 @@ export function mapSsiLogbook(raw: Raw, animalCatalog: Raw[] | null = null): Ssi
     let avgDepth = positive(num(pick(d, ["odin_user_log_avg_depth_m", "avg_depth_m", "avg_depth"])));
     if (avgDepth != null && maxDepth != null && avgDepth > maxDepth) avgDepth = null;
     const temp = num(pick(d, ["odin_user_log_watertemp_c", "watertemp_c", "water_temp"]));
+    const durationMin = positive(num(pick(d, ["odin_user_log_divetime", "divetime", "duration"])));
+    const hint = { maxDepth, durationMin };
+    let profile = profileFromEntry(d, hint)?.samples ?? null;
+    if (!profile && logRef && profileByLog.has(logRef)) {
+      const items = profileByLog.get(logRef)!;
+      profile = parseProfile(items, hint) ?? (items.length === 1 ? parseProfile(items[0], hint) : null);
+    }
+    if (profile) withProfile++;
 
     dives.push({
       externalId,
@@ -435,12 +477,13 @@ export function mapSsiLogbook(raw: Raw, animalCatalog: Raw[] | null = null): Ssi
           }))
         : undefined,
       pendingSpeciesIds: [...new Set(pendingSpeciesIds)],
+      profile: profile ?? undefined,
     });
   }
 
   if (skipped) diagnostics.push(`skipped ${skipped} entries without a valid date`);
   if (deleted) diagnostics.push(`skipped ${deleted} dives marked as deleted in SSI`);
-  diagnostics.push(`dives with buddy: ${withBuddy}, with wildlife: ${withSightings}`);
+  diagnostics.push(`dives with buddy: ${withBuddy}, with wildlife: ${withSightings}, with profile: ${withProfile}`);
   if (unresolvedBuddies || unresolvedAnimals) {
     diagnostics.push(`unresolved ids – buddies: ${unresolvedBuddies}, animals: ${unresolvedAnimals}`);
   }
