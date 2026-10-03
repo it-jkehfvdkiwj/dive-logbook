@@ -1,42 +1,47 @@
 import { db } from "@/lib/db";
 import type { OverviewStats } from "@/types";
 
-export async function getOverviewStats(userId: string): Promise<OverviewStats> {
+/** Optional auf ein Kalenderjahr beschränkt. */
+export async function getOverviewStats(userId: string, year?: number): Promise<OverviewStats> {
+  const dateRange = year
+    ? { date: { gte: new Date(Date.UTC(year, 0, 1)), lt: new Date(Date.UTC(year + 1, 0, 1)) } }
+    : {};
+  const diveWhere = { userId, ...dateRange };
   const [agg, avgDepthAgg, deepest, speciesByCategoryRows, totalSightings, sites, topRaw, diveCountries] =
     await Promise.all([
       db.dive.aggregate({
-        where: { userId },
+        where: diveWhere,
         _count: { _all: true },
         _sum: { duration: true },
         _avg: { duration: true, maxDepth: true },
         _max: { maxDepth: true },
       }),
-      db.dive.aggregate({ where: { userId }, _avg: { avgDepth: true } }),
+      db.dive.aggregate({ where: diveWhere, _avg: { avgDepth: true } }),
       db.dive.findFirst({
-        where: { userId, maxDepth: { not: null } },
+        where: { ...diveWhere, maxDepth: { not: null } },
         orderBy: { maxDepth: "desc" },
         select: { id: true },
       }),
       db.species.groupBy({
         by: ["category"],
-        where: { sightings: { some: { dive: { userId } } } },
+        where: { sightings: { some: { dive: diveWhere } } },
         _count: { _all: true },
       }),
-      db.sighting.count({ where: { dive: { userId } } }),
+      db.sighting.count({ where: { dive: diveWhere } }),
       db.diveSite.findMany({
-        where: { userId, dives: { some: {} } },
-        select: { id: true, country: true, countryCode: true, _count: { select: { dives: true } } },
+        where: { userId, dives: { some: dateRange } },
+        select: { id: true, country: true, countryCode: true, _count: { select: { dives: { where: dateRange } } } },
       }),
       db.sighting.groupBy({
         by: ["speciesId"],
-        where: { dive: { userId } },
+        where: { dive: diveWhere },
         _count: { _all: true },
         orderBy: { _count: { speciesId: "desc" } },
         take: 5,
       }),
       db.diveSite.groupBy({
         by: ["country"],
-        where: { userId, dives: { some: {} } },
+        where: { userId, dives: { some: dateRange } },
       }),
     ]);
 
